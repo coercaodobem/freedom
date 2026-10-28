@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+# Single source of truth for Amethyst release asset naming.
+#
+# Three product lines share this contract:
+#   amethyst-desktop-<version>-<family>-<arch>.<ext>   (Compose Desktop app)
+#   amy-<version>-<family>-<arch>.<ext>                (Amy CLI — cli/ module)
+#   geode-<version>-<family>-<arch>.<ext>              (geode relay — geode/ module)
+#
+#   <version> = tag stripped of leading 'v' (e.g. "1.08.0")
+#   <family>  = macos | windows | linux
+#   <arch>    = x64 | arm64
+#   <ext>     = dmg | msi | zip | deb | rpm | AppImage | flatpak | tar.gz
+#
+# Consumed by: .github/workflows/create-release.yml, .github/workflows/bump-*.yml,
+#              BUILDING.md, local release runbooks.
+#
+# Usage:
+#   source scripts/asset-name.sh
+#   collect_assets     <family> <arch> <version> <dest_dir>   # desktop
+#   collect_cli_assets <family> <arch> <version> <dest_dir>   # amy CLI
+#
+# Expected examples:
+#   amethyst-desktop-1.08.0-macos-x64.dmg
+#   amethyst-desktop-1.08.0-macos-arm64.dmg
+#   amethyst-desktop-1.08.0-windows-x64.msi
+#   amethyst-desktop-1.08.0-windows-x64.zip
+#   amethyst-desktop-1.08.0-windows-arm64.msi
+#   amethyst-desktop-1.08.0-windows-arm64.zip
+#   amethyst-desktop-1.08.0-linux-x64.deb
+#   amethyst-desktop-1.08.0-linux-x64.rpm
+#   amethyst-desktop-1.08.0-x86_64.AppImage
+#   amethyst-desktop-1.08.0-x86_64.AppImage.zsync
+#   amethyst-desktop-1.08.0-linux-x64.flatpak
+#   amethyst-desktop-1.08.0-linux-x64.tar.gz
+#   amethyst-desktop-1.08.0-linux-arm64.deb
+#   amethyst-desktop-1.08.0-linux-arm64.rpm
+#   amethyst-desktop-1.08.0-aarch64.AppImage
+#   amethyst-desktop-1.08.0-linux-arm64.flatpak
+#   amethyst-desktop-1.08.0-linux-arm64.tar.gz
+#   amy-1.08.0-macos-arm64.tar.gz
+#   amy-1.08.0-macos-x64.tar.gz
+#   amy-1.08.0-linux-x64.tar.gz
+#   amy-1.08.0-linux-x64.deb
+#   amy-1.08.0-linux-x64.rpm
+#   amy-1.08.0-linux-arm64.tar.gz
+#   amy-1.08.0-linux-arm64.deb
+#   amy-1.08.0-linux-arm64.rpm
+#   amy-1.08.0-windows-x64.zip
+#   amy-1.08.0-windows-arm64.zip
+#   geode-1.08.0-macos-arm64.tar.gz
+#   geode-1.08.0-linux-x64.tar.gz
+#   geode-1.08.0-linux-x64.deb
+#   geode-1.08.0-linux-x64.rpm
+#   geode-1.08.0-linux-arm64.tar.gz
+#   geode-1.08.0-linux-arm64.deb
+#   geode-1.08.0-linux-arm64.rpm
+#   geode-1.08.0-windows-x64.zip
+#   geode-1.08.0-windows-arm64.zip
+#
+# The AppImage breaks the family/arch shape on purpose: AppImageHub
+# (appimage.github.io) flags "linux" in an AppImage name, since every AppImage
+# is for Linux, and expects the AppImage arch names, so it is
+#   amethyst-desktop-<version>-<x86_64|aarch64>.AppImage
+#
+# Two more assets break the family/arch shape on purpose: the no-JRE jar bundles for
+# Homebrew-core are pure JVM bytecode (no bundled runtime), so a single
+# platform-independent artifact serves every OS:
+#   amy-1.08.0-jvm.tar.gz
+#   geode-1.08.0-jvm.tar.gz
+# They are packaged inline in create-release.yml (linux leg), not via the helpers
+# below, since they have no <family>/<arch> dimension.
+
+set -euo pipefail
+
+# Print the canonical asset filename for a given family/arch/version/extension.
+# Usage: asset_name <family> <arch> <version> <ext>
+asset_name() {
+    local family="$1" arch="$2" version="$3" ext="$4"
+    printf 'amethyst-desktop-%s-%s-%s.%s' "$version" "$family" "$arch" "$ext"
+}
+
+# CLI variant of asset_name — same shape, different product prefix.
+# Usage: cli_asset_name <family> <arch> <version> <ext>
+cli_asset_name() {
+    local family="$1" arch="$2" version="$3" ext="$4"
+    printf 'amy-%s-%s-%s.%s' "$version" "$family" "$arch" "$ext"
+}
+
+# geode relay variant of asset_name — same shape, different product prefix.
+# Usage: geode_asset_name <family> <arch> <version> <ext>
+geode_asset_name() {
+    local family="$1" arch="$2" version="$3" ext="$4"
+    printf 'geode-%s-%s-%s.%s' "$version" "$family" "$arch" "$ext"
+}
+
+# AppImage variant: no <family> (all AppImages are for Linux) and the AppImage
+# arch names (x86_64 / aarch64) instead of x64 / arm64.
+# Usage: appimage_asset_name <arch> <version>
+appimage_asset_name() {
+    local arch="$1" version="$2" appimage_arch
+    case "$arch" in
+        x64)   appimage_arch="x86_64" ;;
+        arm64) appimage_arch="aarch64" ;;
+        *)     echo "appimage_asset_name: unsupported arch '$arch'" >&2; return 1 ;;
+    esac
+    printf 'amethyst-desktop-%s-%s.AppImage' "$version" "$appimage_arch"
+}
+
+# Copy + rename build outputs into <dest_dir> using the canonical naming scheme.
+# Usage: collect_assets <family> <arch> <version> <dest_dir>
+# Expects build outputs under desktopApp/build/... (Compose binaries + custom tasks + portable archives).
+collect_assets() {
+    local family="$1" arch="$2" version="$3" dest="$4"
+    # Normalize internal matrix family aliases to canonical asset-name families.
+    [[ "$family" == "linux-portable" ]] && family="linux"
+    mkdir -p "$dest"
+    shopt -s nullglob
+
+    # Compose Desktop jpackage outputs (main-release/<format>/*.ext)
+    local src ext base dst
+    for src in \
+        desktopApp/build/compose/binaries/main-release/dmg/*.dmg \
+        desktopApp/build/compose/binaries/main-release/msi/*.msi \
+        desktopApp/build/compose/binaries/main-release/deb/*.deb \
+        desktopApp/build/compose/binaries/main-release/rpm/*.rpm \
+        desktopApp/build/appimage/*.AppImage \
+        desktopApp/build/flatpak/*.flatpak \
+        desktopApp/build/portable/*.tar.gz \
+        desktopApp/build/portable/*.zip \
+    ; do
+        [ -f "$src" ] || continue
+        base="$(basename "$src")"
+        case "$base" in
+            *.tar.gz) ext="tar.gz" ;;
+            *)        ext="${base##*.}" ;;
+        esac
+        if [[ "$ext" == "AppImage" ]]; then
+            dst="$dest/$(appimage_asset_name "$arch" "$version")"
+        else
+            dst="$dest/$(asset_name "$family" "$arch" "$version" "$ext")"
+        fi
+        cp "$src" "$dst"
+        echo "Collected: $dst"
+        # The AppImage's zsync file (delta updates; see createReleaseAppImage) travels with it.
+        if [[ "$ext" == "AppImage" && -f "$src.zsync" ]]; then
+            cp "$src.zsync" "$dst.zsync"
+            echo "Collected: $dst.zsync"
+        fi
+    done
+    shopt -u nullglob
+}
+
+# Copy + rename amy CLI build outputs into <dest_dir> using the canonical
+# amy-<version>-<family>-<arch>.<ext> scheme.
+#
+# Expected inputs:
+#   cli/build/amy-image/amy/    flat app-image built by :cli:amyImage
+#                               (bin/amy + bin/amy.bat + lib/*.jar + runtime/)
+#   cli/build/jpackage/*.deb    from :cli:jpackageDeb (Linux only)
+#   cli/build/jpackage/*.rpm    from :cli:jpackageRpm (Linux only)
+#
+# On Windows the flat image is packaged as .zip (native archive format,
+# preserves file layout without requiring a tar tool at install time). Every
+# other OS uses tar.gz.
+#
+# Usage: collect_cli_assets <family> <arch> <version> <dest_dir>
+collect_cli_assets() {
+    local family="$1" arch="$2" version="$3" dest="$4"
+    mkdir -p "$dest"
+    local abs_dest
+    abs_dest="$(cd "$dest" && pwd)"
+    shopt -s nullglob
+
+    # 1. Archive the flat app-image into amy-<version>-<family>-<arch>.<ext>.
+    #    macOS runners produce only this one. Windows uses .zip; every other
+    #    OS uses tar.gz.
+    local app_image="cli/build/amy-image/amy"
+    if [ -d "$app_image" ]; then
+        if [ "$family" = "windows" ]; then
+            local zipfile="$abs_dest/$(cli_asset_name "$family" "$arch" "$version" zip)"
+            # Prefer 7z when available (bash+7zip is standard on GH windows runners),
+            # else fall back to a portable python3 zipfile. `zip` itself is not always
+            # present on GH windows runners.
+            if command -v 7z >/dev/null 2>&1; then
+                ( cd "$(dirname "$app_image")" && 7z a -tzip "$zipfile" "$(basename "$app_image")/" >/dev/null )
+            elif command -v zip >/dev/null 2>&1; then
+                ( cd "$(dirname "$app_image")" && zip -qr "$zipfile" "$(basename "$app_image")" )
+            else
+                python3 - "$app_image" "$zipfile" <<'PY'
+import os, sys, zipfile
+src, dst = sys.argv[1], sys.argv[2]
+root = os.path.dirname(src)
+base = os.path.basename(src)
+with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
+    for dirpath, _dirs, files in os.walk(src):
+        for f in files:
+            p = os.path.join(dirpath, f)
+            zf.write(p, os.path.relpath(p, root))
+PY
+            fi
+            echo "Collected: $zipfile"
+        else
+            local tarball="$abs_dest/$(cli_asset_name "$family" "$arch" "$version" tar.gz)"
+            ( cd "$(dirname "$app_image")" && tar czf "$tarball" "$(basename "$app_image")" )
+            echo "Collected: $tarball"
+        fi
+    fi
+
+    # 2. Linux native installers (.deb, .rpm). jpackage writes them directly
+    #    to cli/build/jpackage/ with its own naming, so we re-copy under the
+    #    canonical scheme.
+    local src base ext dst
+    for src in \
+        cli/build/jpackage/*.deb \
+        cli/build/jpackage/*.rpm \
+    ; do
+        [ -f "$src" ] || continue
+        base="$(basename "$src")"
+        ext="${base##*.}"
+        dst="$abs_dest/$(cli_asset_name "$family" "$arch" "$version" "$ext")"
+        cp "$src" "$dst"
+        echo "Collected: $dst"
+    done
+    shopt -u nullglob
+}
+
+# Copy + rename geode relay build outputs into <dest_dir> using the canonical
+# geode-<version>-<family>-<arch>.<ext> scheme.
+#
+# Expected inputs:
+#   geode/build/geode-image/geode/  flat app-image built by :geode:geodeImage
+#                                   (bin/geode + bin/geode.bat + lib/*.jar
+#                                    + runtime/ + share/)
+#   geode/build/jpackage/*.deb      from :geode:jpackageDeb (Linux only)
+#   geode/build/jpackage/*.rpm      from :geode:jpackageRpm (Linux only)
+#
+# On Windows the flat image is packaged as .zip; every other OS uses tar.gz.
+# See the matching comment in collect_cli_assets for the tool-selection order.
+#
+# Usage: collect_geode_assets <family> <arch> <version> <dest_dir>
+collect_geode_assets() {
+    local family="$1" arch="$2" version="$3" dest="$4"
+    mkdir -p "$dest"
+    local abs_dest
+    abs_dest="$(cd "$dest" && pwd)"
+    shopt -s nullglob
+
+    # 1. Archive the flat app-image into geode-<version>-<family>-<arch>.<ext>.
+    #    macOS runners produce only this one. Windows uses .zip; every other
+    #    OS uses tar.gz.
+    local app_image="geode/build/geode-image/geode"
+    if [ -d "$app_image" ]; then
+        if [ "$family" = "windows" ]; then
+            local zipfile="$abs_dest/$(geode_asset_name "$family" "$arch" "$version" zip)"
+            if command -v 7z >/dev/null 2>&1; then
+                ( cd "$(dirname "$app_image")" && 7z a -tzip "$zipfile" "$(basename "$app_image")/" >/dev/null )
+            elif command -v zip >/dev/null 2>&1; then
+                ( cd "$(dirname "$app_image")" && zip -qr "$zipfile" "$(basename "$app_image")" )
+            else
+                python3 - "$app_image" "$zipfile" <<'PY'
+import os, sys, zipfile
+src, dst = sys.argv[1], sys.argv[2]
+root = os.path.dirname(src)
+base = os.path.basename(src)
+with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
+    for dirpath, _dirs, files in os.walk(src):
+        for f in files:
+            p = os.path.join(dirpath, f)
+            zf.write(p, os.path.relpath(p, root))
+PY
+            fi
+            echo "Collected: $zipfile"
+        else
+            local tarball="$abs_dest/$(geode_asset_name "$family" "$arch" "$version" tar.gz)"
+            ( cd "$(dirname "$app_image")" && tar czf "$tarball" "$(basename "$app_image")" )
+            echo "Collected: $tarball"
+        fi
+    fi
+
+    # 2. Linux native installers (.deb, .rpm). jpackage writes them directly
+    #    to geode/build/jpackage/ with its own naming, so we re-copy under the
+    #    canonical scheme.
+    local src base ext dst
+    for src in \
+        geode/build/jpackage/*.deb \
+        geode/build/jpackage/*.rpm \
+    ; do
+        [ -f "$src" ] || continue
+        base="$(basename "$src")"
+        ext="${base##*.}"
+        dst="$abs_dest/$(geode_asset_name "$family" "$arch" "$version" "$ext")"
+        cp "$src" "$dst"
+        echo "Collected: $dst"
+    done
+    shopt -u nullglob
+}

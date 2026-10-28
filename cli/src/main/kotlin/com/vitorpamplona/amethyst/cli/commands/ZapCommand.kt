@@ -1,0 +1,386 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.cli.commands
+
+import com.vitorpamplona.amethyst.cli.Args
+import com.vitorpamplona.amethyst.cli.Context
+import com.vitorpamplona.amethyst.cli.DataDir
+import com.vitorpamplona.amethyst.cli.Output
+import com.vitorpamplona.amethyst.commons.actions.ZapActions
+import com.vitorpamplona.amethyst.commons.service.lnurl.LightningAddressResolver
+import com.vitorpamplona.quartz.experimental.clink.pointers.ClinkPointerParser
+import com.vitorpamplona.quartz.experimental.clink.pointers.NDebit
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.core.HexKey
+import com.vitorpamplona.quartz.nip01Core.metadata.MetadataEvent
+import com.vitorpamplona.quartz.nip01Core.relay.filters.Filter
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
+import com.vitorpamplona.quartz.nip57Zaps.ZapReceiptEvent
+import com.vitorpamplona.quartz.nip57Zaps.ZapRequestEvent
+import okhttp3.OkHttpClient
+
+/**
+ * `amy zap <user|event> <target> <sats>` — build a NIP-57 zap request and
+ * fetch a BOLT11 invoice from the recipient's Lightning service.
+ *
+ * Two subcommands:
+ *   * `zap user <user> <sats>` — profile zap (no event reference)
+ *   * `zap event <event-id> <sats>` — event zap (must be in local store)
+ *
+ * The flow is:
+ *   1. Resolve recipient identifier → pubkey + kind:0 metadata.
+ *   2. Extract LN address (`lud16` preferred, then `lud06` LNURL).
+ *   3. Build + sign the NIP-57 kind:9734 zap-request event via
+ *      [ZapActions].
+ *   4. POST it to the recipient's LNURL-pay callback via
+ *      [LightningAddressResolver] to receive a BOLT11 invoice.
+ *
+ * By default the invoice is printed but **not** auto-paid — paste it into any LN
+ * wallet to settle. Pass `--with <ndebit>` to settle it in-place through a CLINK
+ * debit pointer (kind-21002), mirroring how the app routes a zap through its
+ * default payment source; each recipient then also reports `paid` + `preimage`.
+ */
+object ZapCommand {
+    val USAGE: String =
+        """
+        |Zaps (NIP-57):
+        |  zap user USER SATS               build a profile zap-request, fetch a BOLT11
+        |    [--comment X] [--anon|--private]  invoice from the recipient's LN service
+        |    [--with NDEBIT]                   (no auto-payment by default — paste the
+        |    [--timeout SECS]                   invoice into a wallet)
+        |  zap event EVENT-ID SATS           same, but attribute the zap to a specific
+        |    [--comment X] [--anon|--private]  event (must be in local store; zap splits
+        |    [--with NDEBIT]                   are honored, one invoice per recipient)
+        |    [--timeout SECS]
+        |
+        |  --with NDEBIT auto-pays each fetched invoice in-place through a CLINK
+        |  debit pointer (kind:21002); the output then also reports paid + preimage.
+        """.trimMargin()
+
+    suspend fun dispatch(
+        dataDir: DataDir,
+        tail: Array<String>,
+    ): Int =
+        route(
+            "zap",
+            tail,
+            "zap <user|event> <target> <sats> [--comment X] [--anon] [--with NDEBIT] [--timeout SECS]",
+            help = USAGE,
+            routes =
+                mapOf(
+                    "user" to { rest -> zapUser(dataDir, rest) },
+                    "event" to { rest -> zapEvent(dataDir, rest) },
+                ),
+        )
+
+    private suspend fun zapUser(
+        dataDir: DataDir,
+        rest: Array<String>,
+    ): Int {
+        if (rest.size < 2) return Output.error("bad_args", "zap user <user> <sats> [--comment X] [--anon] [--with <ndebit>] [--timeout SECS]")
+        val userArg = rest[0]
+        val sats =
+            rest[1].toLongOrNull()?.takeIf { it > 0 }
+                ?: return Output.error("bad_args", "sats must be a positive integer (got '${rest[1]}')")
+        val args = Args(rest.drop(2).toTypedArray())
+        val comment = args.flag("comment") ?: ""
+        val zapType = parseZapType(args)
+        val timeoutMs = args.timeoutMs(8)
+        val withFlag = args.flag("with")
+        val settleWith =
+            if (withFlag == null) {
+                null
+            } else {
+                (ClinkPointerParser.parse(withFlag.trim()) as? NDebit)?.takeIf { it.relays.isNotEmpty() }
+                    ?: return Output.error("bad_args", "--with must be a valid ndebit pointer with a relay")
+            }
+        args.rejectUnknown()
+
+        Context.open(dataDir).use { ctx ->
+            ctx.prepare()
+            val recipient = ctx.requireUserHex(userArg)
+            val metadata =
+                fetchLatestMetadata(ctx, recipient, ctx.bootstrapRelays(), timeoutMs)
+                    ?: return Output.error("not_found", "no kind:0 metadata found for $recipient")
+            val lnAddress =
+                ZapActions.extractLnAddress(metadata)
+                    ?: return Output.error("no_lightning", "recipient has no lud16 or lud06 in their profile")
+
+            val request =
+                ZapActions.buildUserZapRequest(
+                    signer = ctx.signer,
+                    recipientPubkey = recipient,
+                    amountMillisats = ZapActions.satsToMillisats(sats),
+                    inboxRelays = ctx.outboxRelays(),
+                    comment = comment,
+                    zapType = zapType,
+                )
+
+            emitZapResult(ctx, sats, lnAddress, comment, request, zapType, timeoutMs, settleWith)
+            return 0
+        }
+    }
+
+    private suspend fun zapEvent(
+        dataDir: DataDir,
+        rest: Array<String>,
+    ): Int {
+        if (rest.size < 2) return Output.error("bad_args", "zap event <event-id> <sats> [--comment X] [--anon] [--private] [--with <ndebit>] [--timeout SECS]")
+        val eventId = rest[0]
+        if (eventId.length != 64) return Output.error("bad_args", "event-id must be 64-hex (nevent bech32 not yet supported)")
+        val sats =
+            rest[1].toLongOrNull()?.takeIf { it > 0 }
+                ?: return Output.error("bad_args", "sats must be a positive integer (got '${rest[1]}')")
+        val args = Args(rest.drop(2).toTypedArray())
+        val comment = args.flag("comment") ?: ""
+        val zapType = parseZapType(args)
+        val timeoutMs = args.timeoutMs(8)
+        val withFlag = args.flag("with")
+        val settleWith =
+            if (withFlag == null) {
+                null
+            } else {
+                (ClinkPointerParser.parse(withFlag.trim()) as? NDebit)?.takeIf { it.relays.isNotEmpty() }
+                    ?: return Output.error("bad_args", "--with must be a valid ndebit pointer with a relay")
+            }
+        args.rejectUnknown()
+
+        Context.open(dataDir).use { ctx ->
+            ctx.prepare()
+            val zappedEvent =
+                ctx.store.query<Event>(Filter(ids = listOf(eventId), limit = 1)).firstOrNull()
+                    ?: return Output.error("not_found", "event $eventId not in local store; sync first or fetch by id")
+
+            val bootstrap = ctx.bootstrapRelays()
+
+            // Resolves a pubkey to an LN address by reading the latest
+            // kind:0 from the local store, falling back to a relay drain
+            // when never seen. Mirrors what the Amethyst foreground UI
+            // pulls out of User.lnAddress().
+            val lookupLnAddress: suspend (HexKey) -> String? = { pk ->
+                fetchLatestMetadata(ctx, pk, bootstrap, timeoutMs)
+                    ?.let(ZapActions::extractLnAddress)
+            }
+
+            // Recipient's NIP-65 read ("inbox") relays — read-side flag on
+            // their advertised kind:10002. These get unioned into each
+            // zap request's `relays` tag so the kind:9735 receipt routes
+            // to the recipient's clients. Matches `User.inboxRelays()` in
+            // the Android Account.
+            val lookupInboxRelays: suspend (HexKey) -> Set<NormalizedRelayUrl> = { pk ->
+                ctx
+                    .relaysOf(pk)
+                    ?.readRelaysNorm()
+                    ?.toSet()
+                    .orEmpty()
+            }
+
+            val requests =
+                ZapActions.buildEventZapRequestsForSplits(
+                    signer = ctx.signer,
+                    zappedEvent = zappedEvent,
+                    totalAmountMillisats = ZapActions.satsToMillisats(sats),
+                    senderInboxRelays = ctx.outboxRelays(),
+                    lookupLnAddress = lookupLnAddress,
+                    lookupInboxRelays = lookupInboxRelays,
+                    comment = comment,
+                    zapType = zapType,
+                )
+
+            if (requests.isEmpty()) {
+                return Output.error(
+                    "no_lightning",
+                    "no payable recipients — neither the author nor any zap-split recipient has a usable LN address",
+                )
+            }
+
+            emitSplitZapResult(ctx, sats, comment, zappedEvent.id, zapType, requests, timeoutMs, settleWith)
+            return 0
+        }
+    }
+
+    private suspend fun emitZapResult(
+        ctx: Context,
+        sats: Long,
+        lnAddress: String,
+        comment: String,
+        request: ZapRequestEvent,
+        zapType: ZapReceiptEvent.ZapType,
+        timeoutMs: Long,
+        settleWith: NDebit?,
+        zappedEventId: HexKey? = null,
+    ) {
+        // Reuse the same OkHttp instance the Context uses for nip-05 / WS;
+        // this respects any proxy/timeout config wired in there.
+        val resolver = LightningAddressResolver(httpClient = sharedOkHttp(ctx))
+
+        val result =
+            resolver.fetchInvoice(
+                lnAddress = lnAddress,
+                milliSats = ZapActions.satsToMillisats(sats),
+                message = comment,
+                zapRequest = request,
+            )
+
+        when (result) {
+            is LightningAddressResolver.Result.Success -> {
+                val base =
+                    buildMap<String, Any?> {
+                        put("ln_address", lnAddress)
+                        put("amount_sats", sats)
+                        put("zap_type", zapType.name.lowercase())
+                        put("comment", comment)
+                        put("zap_request_id", request.id)
+                        if (zappedEventId != null) put("zapped_event_id", zappedEventId)
+                        put("invoice", result.invoice)
+                    }
+                val settled = if (settleWith != null) settleEntry(ctx, settleWith, result.invoice, timeoutMs) else emptyMap()
+                Output.emit(base + settled)
+            }
+            is LightningAddressResolver.Result.Error -> {
+                Output.error("invoice_failed", result.message)
+            }
+        }
+    }
+
+    /**
+     * Settles [bolt11] through a CLINK debit pointer (kind-21002, reusing [DebitCommands.settle])
+     * and returns the result fields (`paid` + `preimage`/`pay_error`) to merge into the zap
+     * output. Per-recipient for splits.
+     */
+    private suspend fun settleEntry(
+        ctx: Context,
+        debit: NDebit,
+        bolt11: String,
+        timeoutMs: Long,
+    ): Map<String, Any?> =
+        when (val outcome = DebitCommands.settle(ctx, debit, timeoutMs) { it.payInvoice(bolt11, null) }) {
+            DebitCommands.Settle.Timeout -> mapOf("paid" to false, "pay_error" to "no response from the debit service")
+            DebitCommands.Settle.BadReply -> mapOf("paid" to false, "pay_error" to "debit reply was not a kind-21002 event")
+            is DebitCommands.Settle.Replied ->
+                if (outcome.response.isOk()) {
+                    mapOf("paid" to true, "preimage" to outcome.response.preimage, "debit_request_id" to outcome.requestId)
+                } else {
+                    mapOf(
+                        "paid" to false,
+                        "pay_error" to (outcome.response.error?.takeIf { it.isNotBlank() } ?: "code ${outcome.response.code}"),
+                        "debit_request_id" to outcome.requestId,
+                    )
+                }
+        }
+
+    /**
+     * Multi-recipient (split-aware) event-zap result emitter. Fetches one
+     * BOLT11 invoice per [ZapActions.ZapRequestForSplit] and writes a
+     * single JSON object enumerating each recipient + its invoice (or
+     * per-recipient `invoice_error` when the LNURL fetch fails). Total
+     * sat sum may be a few millisats below the requested amount due to
+     * whole-sat rounding in the split shares.
+     */
+    private suspend fun emitSplitZapResult(
+        ctx: Context,
+        sats: Long,
+        comment: String,
+        zappedEventId: HexKey,
+        zapType: ZapReceiptEvent.ZapType,
+        requests: List<ZapActions.ZapRequestForSplit>,
+        timeoutMs: Long,
+        settleWith: NDebit?,
+    ) {
+        val resolver = LightningAddressResolver(httpClient = sharedOkHttp(ctx))
+
+        val recipientEntries =
+            requests.map { req ->
+                val shareSats = req.amountMillisats / 1000
+                val result =
+                    resolver.fetchInvoice(
+                        lnAddress = req.recipient.lnAddress,
+                        milliSats = req.amountMillisats,
+                        message = comment,
+                        zapRequest = req.request,
+                    )
+                val entry =
+                    mutableMapOf<String, Any?>(
+                        "ln_address" to req.recipient.lnAddress,
+                        "pubkey" to req.recipient.pubkey,
+                        "weight" to req.recipient.weight,
+                        "amount_sats" to shareSats,
+                        "zap_request_id" to req.request.id,
+                    )
+                when (result) {
+                    is LightningAddressResolver.Result.Success -> {
+                        entry["invoice"] = result.invoice
+                        if (settleWith != null) entry.putAll(settleEntry(ctx, settleWith, result.invoice, timeoutMs))
+                    }
+
+                    is LightningAddressResolver.Result.Error ->
+                        entry["invoice_error"] = result.message
+                }
+                entry
+            }
+
+        Output.emit(
+            mapOf(
+                "zapped_event_id" to zappedEventId,
+                "zap_type" to zapType.name.lowercase(),
+                "comment" to comment,
+                "requested_sats" to sats,
+                "billed_sats" to recipientEntries.sumOf { (it["amount_sats"] as? Long) ?: 0L },
+                "recipient_count" to recipientEntries.size,
+                "recipients" to recipientEntries,
+            ),
+        )
+    }
+
+    private fun parseZapType(args: Args): ZapReceiptEvent.ZapType =
+        when {
+            args.bool("anon") -> ZapReceiptEvent.ZapType.ANONYMOUS
+            args.bool("private") -> ZapReceiptEvent.ZapType.PRIVATE
+            else -> ZapReceiptEvent.ZapType.PUBLIC
+        }
+
+    private suspend fun fetchLatestMetadata(
+        ctx: Context,
+        pubKey: HexKey,
+        relays: Set<NormalizedRelayUrl>,
+        timeoutMs: Long,
+    ): MetadataEvent? {
+        // Cache-first: try the local store before going to the network.
+        ctx.profileOf(pubKey)?.let { return it }
+        if (relays.isEmpty()) return null
+        val filter = Filter(kinds = listOf(MetadataEvent.KIND), authors = listOf(pubKey), limit = 1)
+        val received = ctx.drain(relays.associateWith { listOf(filter) }, timeoutMs)
+        return received
+            .mapNotNull { (_, ev) -> ev as? MetadataEvent }
+            .filter { it.pubKey == pubKey }
+            .maxByOrNull { it.createdAt }
+    }
+
+    /**
+     * Per-invocation OkHttpClient. Amy's [Context] also has its own OkHttp
+     * (for WS + NIP-05); we keep this separate because [Context.okhttp] is
+     * private — exposing it just to reuse here would widen the API more
+     * than is warranted for a single LNURL fetch.
+     */
+    private fun sharedOkHttp(
+        @Suppress("UNUSED_PARAMETER") ctx: Context,
+    ): OkHttpClient = OkHttpClient.Builder().build()
+}

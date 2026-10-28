@@ -1,0 +1,578 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.commons.napplet
+
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.AppConnectResult
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.AppSignerPolicy
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.NostrConnectPrompt
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.NostrOpDecision
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.NostrSignerConsentPrompt
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.NostrSignerOp
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.NostrSignerPermissionLedger
+import com.vitorpamplona.amethyst.commons.connectedApps.signers.SignerOpGrant
+import com.vitorpamplona.amethyst.commons.napplet.permissions.GrantState
+import com.vitorpamplona.amethyst.commons.napplet.permissions.NappletPermissionLedger
+import com.vitorpamplona.amethyst.commons.napplet.permissions.PermissionDecision
+import com.vitorpamplona.amethyst.commons.napplet.protocol.NappletRequest
+import com.vitorpamplona.amethyst.commons.napplet.protocol.NappletResponse
+import com.vitorpamplona.amethyst.commons.napplet.protocol.NappletStorageScope
+import com.vitorpamplona.amethyst.commons.napplet.protocol.toNarrowSignerOp
+import com.vitorpamplona.amethyst.commons.napplet.protocol.toSignerOp
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip01Core.signers.NostrSigner
+import com.vitorpamplona.quartz.utils.TimeUtils
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.cancellation.CancellationException
+
+/**
+ * The trust boundary, expressed as code. The broker is the **only** component that holds a
+ * [NostrSigner] and turns an untrusted napplet's [NappletRequest] into a [NappletResponse],
+ * gating every dangerous operation through three checks, in order:
+ *
+ * 1. **Declaration** — the request's capability must appear in the manifest's `requires`
+ *    (`declared`). An applet cannot use a capability it never asked for up front.
+ * 2. **Ledger** — a standing grant/denial decides without prompting.
+ * 3. **Consent** — when no standing decision exists, the user is asked.
+ *
+ * Two capability-specific policies refine step 2/3:
+ * - **Per-use capabilities** ([NappletCapability.requiresPerUseConsent], i.e. [NappletCapability.VALUE])
+ *   never auto-approve from a prior grant — every payment is confirmed afresh, with the amount shown.
+ * - All signer types — internal, NIP-46 remote, and NIP-55 external — are gated through Amethyst's
+ *   consent UI before the operation reaches the signer. External signers add their own per-request
+ *   prompt on top (double-prompting), ensuring the user can differentiate requests from different
+ *   apps inside the external signer.
+ *
+ * Security invariants enforced here (never trusted from the applet): the signing identity is
+ * always the host's signer; the napplet only ever supplies an unsigned template — the shell signs
+ * it and stamps `created_at` from the host clock; a response never contains private key bytes;
+ * storage is namespaced per applet coordinate.
+ */
+class NappletBroker(
+    private val signer: NostrSigner,
+    private val ledger: NappletPermissionLedger,
+    private val consentPrompt: NappletConsentPrompt,
+    private val relay: NappletRelayGateway? = null,
+    private val storage: NappletStorage? = null,
+    private val wallet: NappletWalletGateway? = null,
+    private val resource: NappletResourceGateway? = null,
+    private val upload: NappletUploadGateway? = null,
+    private val identityReads: NappletIdentityGateway? = null,
+    private val theme: NappletThemeGateway? = null,
+    private val notify: NappletNotifyGateway? = null,
+    private val signerLedger: NostrSignerPermissionLedger? = null,
+    private val nostrConnectPrompt: NostrConnectPrompt? = null,
+    private val signerConsentPrompt: NostrSignerConsentPrompt? = null,
+    // Plaintext of recent nip44.encrypt calls, read back by the consent prompt for the seal that
+    // carries the ciphertext (see [NappletRecentEncryptions]).
+    private val recentEncryptions: NappletRecentEncryptions? = null,
+    // Wall-clock source (ms) for the post-cancel re-prompt cooldown; injectable for tests.
+    private val nowMillis: () -> Long = { TimeUtils.nowMillis() },
+) {
+    // Serializes the consent-prompt path so concurrent requests queue into one dialog at a time
+    // (see [authorizeWithConsent]). Only the prompt is held here; non-prompting paths and execute()
+    // run unserialized.
+    private val consentLock = Mutex()
+
+    // Serializes first-connect and per-op signer consent dialogs so concurrent signing requests
+    // queue into one dialog at a time rather than launching several dialogs simultaneously.
+    private val signerConsentLock = Mutex()
+
+    // In-memory session grants (AllowForSession): cleared when this broker instance is destroyed.
+    // Keyed by "<coordinate>|<op.key>" via [sessionKey] — this broker instance is shared by every
+    // applet and browser origin under the account, so an unkeyed op would let one app's session
+    // grant silently authorize the same op for all the others. Only accessed under
+    // signerConsentLock.
+    private val sessionAllows = mutableSetOf<String>()
+
+    // Apps whose first-connect dialog the user just dismissed with Cancel, mapped to the wall-clock
+    // instant (ms) their re-prompt suppression expires. Cancelling means "not now": for a brief
+    // cooldown we drop re-prompts so the burst of requests a page/napplet fires on load (relays +
+    // storage + identity, all racing) doesn't relaunch the dialog once per request. Once the cooldown
+    // lapses the entry is stale, so a fresh request — e.g. the user deliberately re-triggering login —
+    // prompts again. (A plain "suppress forever" set used to lock the user out: a single Cancel killed
+    // every future prompt for the broker's whole lifetime, and because Cancel persists nothing there
+    // was no Connected-Apps entry to clear to recover.)
+    // Only accessed under signerConsentLock.
+    private val cancelledUntil = mutableMapOf<String, Long>()
+
+    /**
+     * Authorizes and runs [request] on behalf of [identity]. [declared] is the capability set the
+     * manifest's `requires` resolved to; a request outside it is refused before any prompt.
+     * Re-throws [CancellationException]; converts any other failure into [NappletResponse.Failed]
+     * so host internals never cross back to the applet process.
+     */
+    suspend fun handle(
+        identity: NappletIdentity,
+        request: NappletRequest,
+        declared: Set<NappletCapability>,
+    ): NappletResponse {
+        val capability = request.capability
+
+        if (capability !in declared) {
+            return NappletResponse.Denied(capability, "This napplet did not declare the '${capability.name.lowercase()}' capability.")
+        }
+
+        // A standing denial always wins, even for signer-self-gated capabilities.
+        if (ledger.decide(identity, capability) == PermissionDecision.DENY) {
+            return NappletResponse.Denied(capability, "Blocked by a standing denial.")
+        }
+
+        // Show the first-connect dialog if the app has no signer policy yet.
+        if (signerLedger != null && !signerLedger.hasPolicy(signerCoordinateFor(identity))) {
+            if (!ensureConnected(identity, declared)) {
+                return NappletResponse.Denied(capability, "Connection not authorized.")
+            }
+        }
+
+        // The per-operation signer gate below shows the event itself; for requests it covers, a second,
+        // generic "this site wants to use Relays" prompt first only made the user answer twice.
+        val signerOp = if (signerLedger != null) request.toSignerOp() else null
+        val signerPromptDecides = signerOp != null && signerConsentPrompt != null
+
+        val authorized =
+            when {
+                // Keyboard/command action registration is a shell-mediated UI affordance, not key
+                // access — declared is enough; it never prompts.
+                request is NappletRequest.RegisterAction || request is NappletRequest.UnregisterAction -> true
+                // Cosmetic capabilities (theme) never prompt.
+                !capability.requiresConsent -> true
+                // A standing allow short-circuits, except for per-use capabilities (e.g. payments).
+                ledger.decide(identity, capability) == PermissionDecision.ALLOW && !capability.requiresPerUseConsent -> true
+                // Signing / encryption: one prompt, the signer's. A standing capability DENY was already
+                // honored above; per-use capabilities keep their own prompt.
+                signerPromptDecides && !capability.requiresPerUseConsent -> true
+                else -> authorizeWithConsent(identity, capability, request)
+            }
+
+        if (!authorized) return NappletResponse.Denied(capability, "The user declined.")
+
+        // Additional per-operation gate for signing/encryption.
+        if (signerLedger != null) {
+            val op = signerOp
+            if (op != null && !authorizeSignerOp(identity, op, request)) {
+                return NappletResponse.Denied(capability, "Signing operation declined.")
+            }
+        }
+
+        return try {
+            execute(identity, request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            NappletResponse.Failed(e.message ?: e::class.simpleName ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Prompts for consent under [consentLock] so several requests arriving at once — the common case,
+     * a napplet reading relays + storage + identity on load — queue into one dialog at a time instead
+     * of racing. Without this each would launch a consent prompt concurrently; the host can only show
+     * one, so the rest are dropped and their calls hang forever.
+     *
+     * After taking the lock we re-read the standing decision: a sibling request for the same capability
+     * may have recorded an Allow/Deny while we waited, so we honor that instead of prompting again.
+     * Per-use capabilities (payments) always re-prompt, so they skip the re-check.
+     */
+    private suspend fun authorizeWithConsent(
+        identity: NappletIdentity,
+        capability: NappletCapability,
+        request: NappletRequest,
+    ): Boolean =
+        consentLock.withLock {
+            if (!capability.requiresPerUseConsent) {
+                when (ledger.decide(identity, capability)) {
+                    PermissionDecision.DENY -> return@withLock false
+                    PermissionDecision.ALLOW -> return@withLock true
+                    PermissionDecision.ASK -> {}
+                }
+            }
+            val grant = consentPrompt.request(identity, capability, request)
+            ledger.record(identity, capability, effectiveGrant(capability, grant))
+            grant.allowsExecution
+        }
+
+    /** Downgrades a grant to one-shot when the capability forbids persisting that scope (e.g. payments). */
+    private fun effectiveGrant(
+        capability: NappletCapability,
+        grant: GrantState,
+    ): GrantState =
+        when {
+            grant == GrantState.ALLOW_ALWAYS && !capability.canGrantAlways -> GrantState.ALLOW_ONCE
+            grant == GrantState.ALLOW_SESSION && !capability.canGrantSession -> GrantState.ALLOW_ONCE
+            else -> grant
+        }
+
+    private suspend fun execute(
+        identity: NappletIdentity,
+        request: NappletRequest,
+    ): NappletResponse =
+        when (request) {
+            is NappletRequest.GetPublicKey -> NappletResponse.PublicKey(signer.pubKey)
+
+            is NappletRequest.ThemeGet -> {
+                val gateway = theme ?: return NappletResponse.Unsupported("theme.get")
+                val colors = gateway.current()
+                NappletResponse.Theme(colors.background, colors.text, colors.primary)
+            }
+
+            is NappletRequest.IdentityRead -> {
+                val gateway = identityReads ?: return NappletResponse.Unsupported("identity.${request.method}")
+                val raw = gateway.read(request.method, request.argument) ?: return NappletResponse.Unsupported("identity.${request.method}")
+                NappletResponse.Json(raw)
+            }
+
+            // The napplet supplies an unsigned template; the shell signs and publishes it.
+            // created_at comes from the host, never the applet, so it cannot backdate.
+            is NappletRequest.Publish -> signAndPublish(request.kind, request.tags, request.content)
+
+            // NIP-07 signEvent: sign as the user (honoring the app's created_at) and return it WITHOUT
+            // publishing — the web app sends it to relays itself. pubkey is still fixed by the signer.
+            is NappletRequest.SignEvent -> NappletResponse.Published(signer.sign(request.createdAt, request.kind, request.tags, request.content), emptyList())
+
+            is NappletRequest.PublishEncrypted -> {
+                val ciphertext =
+                    when (request.encryption.trim().lowercase()) {
+                        "nip04" -> signer.nip04Encrypt(request.content, request.recipient)
+                        else -> signer.nip44Encrypt(request.content, request.recipient)
+                    }
+                signAndPublish(request.kind, withRecipientTag(request.tags, request.recipient), ciphertext)
+            }
+
+            // NIP-07 nip44.encrypt/decrypt: the shell runs the crypto with the real key and hands back
+            // only the result, so the page can build its own NIP-59 seals without ever seeing the key.
+            is NappletRequest.Nip44Encrypt -> {
+                val ciphertext = signer.nip44Encrypt(request.plaintext, request.peer)
+                recentEncryptions?.record(ciphertext, request.peer, request.plaintext)
+                NappletResponse.Text(ciphertext)
+            }
+
+            is NappletRequest.Nip44Decrypt -> NappletResponse.Text(signer.nip44Decrypt(request.ciphertext, request.peer))
+
+            is NappletRequest.QueryEvents -> {
+                val gateway = relay ?: return NappletResponse.Unsupported("relay.query")
+                NappletResponse.Events(gateway.query(request.filters))
+            }
+
+            // The broker only authorizes the subscription (consent + declaration); the host opens the
+            // live relay subscription and streams relay.event/relay.eose/relay.closed by subId.
+            is NappletRequest.Subscribe -> {
+                relay ?: return NappletResponse.Unsupported("relay.subscribe")
+                NappletResponse.Subscribed
+            }
+
+            is NappletRequest.StorageGet -> {
+                val store = storage ?: return NappletResponse.Unsupported("storage.getItem")
+                NappletResponse.StorageValue(store.get(storageCoordinate(identity, request.scope), request.key))
+            }
+
+            is NappletRequest.StorageSet -> {
+                val store = storage ?: return NappletResponse.Unsupported("storage.setItem")
+                store.set(storageCoordinate(identity, request.scope), request.key, request.value)
+                NappletResponse.Done
+            }
+
+            is NappletRequest.StorageRemove -> {
+                val store = storage ?: return NappletResponse.Unsupported("storage.removeItem")
+                store.remove(storageCoordinate(identity, request.scope), request.key)
+                NappletResponse.Done
+            }
+
+            is NappletRequest.StorageKeys -> {
+                val store = storage ?: return NappletResponse.Unsupported("storage.keys")
+                NappletResponse.Strings(store.keys(storageCoordinate(identity, request.scope)))
+            }
+
+            is NappletRequest.NotifyCreate -> {
+                val gateway = notify ?: return NappletResponse.Unsupported("notify.create")
+                NappletResponse.NotifyCreated(gateway.create(identity.coordinate, request.title, request.body))
+            }
+
+            is NappletRequest.NotifyList -> {
+                val gateway = notify ?: return NappletResponse.Unsupported("notify.list")
+                NappletResponse.NotifyListed(gateway.list(identity.coordinate))
+            }
+
+            is NappletRequest.NotifyDismiss -> {
+                val gateway = notify ?: return NappletResponse.Unsupported("notify.dismiss")
+                gateway.dismiss(identity.coordinate, request.id)
+                NappletResponse.Done
+            }
+
+            // Keyboard actions are acknowledged (with the honored binding) so SDK napplets'
+            // registerAction() resolves; the host binds the key and pushes keys.action when triggered.
+            is NappletRequest.RegisterAction -> NappletResponse.ActionRegistered(request.actionId, request.binding)
+
+            is NappletRequest.UnregisterAction -> NappletResponse.Done
+
+            is NappletRequest.PayInvoice -> {
+                val gateway = wallet ?: return NappletResponse.Unsupported("value.payInvoice")
+                NappletResponse.Paid(gateway.payInvoice(request.invoice))
+            }
+
+            is NappletRequest.ResourceBytes -> {
+                val gateway = resource ?: return NappletResponse.Unsupported("resource.bytes")
+                when (val fetched = gateway.fetch(request.url, identity.coordinate)) {
+                    is NappletResourceResult.Success -> NappletResponse.Bytes(fetched.resource.bytes, fetched.resource.contentType)
+                    is NappletResourceResult.Failure -> NappletResponse.ResourceFailure(fetched.error, fetched.message)
+                }
+            }
+
+            is NappletRequest.ResourceInfo -> {
+                resource ?: return NappletResponse.Unsupported("resource.info")
+                NappletResponse.ResourceInfo(
+                    schemes = listOf("data", "https", "blossom", "nostr"),
+                    maxBytes = RESOURCE_MAX_BYTES,
+                    maxUrls = RESOURCE_MAX_URLS,
+                )
+            }
+
+            is NappletRequest.ResourceBytesMany -> {
+                val gateway = resource ?: return NappletResponse.Unsupported("resource.bytesMany")
+                if (request.urls.isEmpty()) return NappletResponse.ResourceFailure("invalid-request", "Resource URL list is empty.")
+                if (request.urls.size > RESOURCE_MAX_URLS) return NappletResponse.ResourceFailure("too-large", "Resource URL limit exceeded.")
+                NappletResponse.ResourceItems(
+                    request.urls.map { url ->
+                        when (val fetched = gateway.fetch(url, identity.coordinate)) {
+                            is NappletResourceResult.Success ->
+                                NappletResponse.ResourceItem(
+                                    url = url,
+                                    resource = NappletResponse.Bytes(fetched.resource.bytes, fetched.resource.contentType),
+                                )
+                            is NappletResourceResult.Failure ->
+                                NappletResponse.ResourceItem(url = url, error = fetched.error, message = fetched.message)
+                        }
+                    },
+                )
+            }
+
+            is NappletRequest.UploadBlob -> {
+                val gateway = upload ?: return NappletResponse.Unsupported("upload.upload")
+                val res = gateway.upload(request.bytes, request.contentType, request.filename) ?: return NappletResponse.Failed("Upload failed.")
+                NappletResponse.Uploaded(res.url, res.sha256, res.size, res.mimeType)
+            }
+        }
+
+    /**
+     * Signs a napplet-supplied template **as the active user** and publishes it. The applet never
+     * sees a key, can never sign as another identity (the signer fixes `pubkey`), and cannot
+     * backdate (`created_at` is the host clock).
+     */
+    private suspend fun signAndPublish(
+        kind: Int,
+        tags: Array<Array<String>>,
+        content: String,
+    ): NappletResponse {
+        val gateway = relay ?: return NappletResponse.Unsupported("relay.publish")
+        val signed: Event = signer.sign(TimeUtils.now(), kind, tags, content)
+        return NappletResponse.Published(signed, gateway.publish(signed))
+    }
+
+    /** Ensures the encrypted event addresses [recipient] with a `p` tag, without duplicating one. */
+    private fun withRecipientTag(
+        tags: Array<Array<String>>,
+        recipient: String,
+    ): Array<Array<String>> =
+        if (tags.any { it.size >= 2 && it[0] == "p" && it[1] == recipient }) {
+            tags
+        } else {
+            tags + arrayOf(arrayOf("p", recipient))
+        }
+
+    private fun storageCoordinate(
+        identity: NappletIdentity,
+        scope: NappletStorageScope,
+    ): String =
+        when (scope) {
+            NappletStorageScope.SHARED -> identity.storageCoordinate
+            NappletStorageScope.INSTANCE -> identity.instanceStorageCoordinate
+        }
+
+    /**
+     * Shows the first-connect "Connect to Nostr" dialog if no signer policy exists yet.
+     * On success, stores the chosen policy and bulk-grants all declared non-payment capabilities.
+     * Returns false if the user cancelled or blocked the app.
+     */
+    private suspend fun ensureConnected(
+        identity: NappletIdentity,
+        declared: Set<NappletCapability>,
+    ): Boolean =
+        signerConsentLock.withLock {
+            val sl = signerLedger ?: return@withLock true
+            // Re-check after acquiring lock: a sibling request may have set the policy while we waited.
+            if (sl.hasPolicy(signerCoordinateFor(identity))) return@withLock true
+
+            // Within the post-cancel cooldown, suppress re-prompting so a load-time burst doesn't
+            // relaunch the dialog per request. Once it lapses, drop the stale entry and fall through to
+            // prompt again — this is what lets the user retry after dismissing the dialog. The cooldown
+            // self-clears, so there is nothing to hunt down and clear in Connected Apps.
+            cancelledUntil[identity.coordinate]?.let { until ->
+                if (nowMillis() < until) return@withLock false
+                cancelledUntil.remove(identity.coordinate)
+            }
+
+            val prompt = nostrConnectPrompt ?: return@withLock true
+            when (val result = prompt.request(identity, declared)) {
+                is AppConnectResult.Connected -> {
+                    cancelledUntil.remove(identity.coordinate)
+                    sl.setPolicy(signerCoordinateFor(identity), result.policy)
+                    // Bulk-grant non-payment capabilities only for non-paranoid policies.
+                    // PARANOID users chose "ask me for everything" — leave the capability ledger
+                    // empty so each capability prompts on first use.
+                    if (result.policy != AppSignerPolicy.PARANOID) {
+                        for (cap in declared) {
+                            if (!cap.requiresPerUseConsent) {
+                                ledger.record(identity, cap, GrantState.ALLOW_ALWAYS)
+                            }
+                        }
+                    }
+                    true
+                }
+                AppConnectResult.Blocked -> {
+                    sl.setPolicy(signerCoordinateFor(identity), AppSignerPolicy.PARANOID)
+                    for (cap in declared) {
+                        ledger.record(identity, cap, GrantState.DENY)
+                    }
+                    false
+                }
+                AppConnectResult.Cancelled -> {
+                    cancelledUntil[identity.coordinate] = nowMillis() + CANCEL_REPROMPT_COOLDOWN_MS
+                    false
+                }
+            }
+        }
+
+    /**
+     * Gates a specific signing/encryption operation through the signer permission ledger.
+     * If the ledger says ASK, prompts the user and records their choice.
+     */
+    private suspend fun authorizeSignerOp(
+        identity: NappletIdentity,
+        op: NostrSignerOp,
+        request: NappletRequest,
+    ): Boolean =
+        signerConsentLock.withLock {
+            val sl = signerLedger ?: return@withLock true
+            val coordinate = signerCoordinateFor(identity)
+            // A decrypt request also carries a narrower op ("decrypt messages from THIS
+            // counterparty"). A standing narrow grant satisfies it without widening the broad one.
+            val narrowOp = request.toNarrowSignerOp()
+
+            // Session grants win immediately without touching storage. Scoped to this applet: a
+            // grant made for one app never authorizes another.
+            if (sessionKey(coordinate, op) in sessionAllows) {
+                sl.updateLastUsed(coordinate)
+                return@withLock true
+            }
+            when (sl.decide(coordinate, op)) {
+                NostrOpDecision.ALLOW -> {
+                    sl.updateLastUsed(coordinate)
+                    true
+                }
+                // An explicit DENY on the broad op is final — a narrow grant never overrides it.
+                NostrOpDecision.DENY -> false
+                NostrOpDecision.ASK -> {
+                    if (narrowOp != null && isNarrowAllowed(sl, coordinate, narrowOp)) {
+                        sl.updateLastUsed(coordinate)
+                        return@withLock true
+                    }
+                    val prompt = signerConsentPrompt ?: return@withLock true
+                    val grant = prompt.request(identity, op, request)
+                    // Record the GRANT's own op, never the requested one: the dialog may hand back a
+                    // narrower op ("only from this counterparty"), and a stored grant must never be
+                    // wider than what the user actually tapped.
+                    sl.record(coordinate, grant)
+                    if (grant is SignerOpGrant.AllowForSession) {
+                        sessionAllows.add(sessionKey(coordinate, grant.op))
+                    }
+                    if (grant.isAllowed) sl.updateLastUsed(coordinate)
+                    grant.isAllowed
+                }
+            }
+        }
+
+    /**
+     * True when a standing or session grant exists for the narrower [narrowOp] (e.g. decrypt-from-X).
+     * Only an explicit per-op override counts: [NostrSignerPermissionLedger.decide] would otherwise
+     * fall through to the app's policy, and FULL_TRUST/REASONABLE would answer for an op nobody ever
+     * granted. Mirrors the NIP-46 authorizer so both surfaces honour a narrow grant identically.
+     */
+    private suspend fun isNarrowAllowed(
+        sl: NostrSignerPermissionLedger,
+        coordinate: String,
+        narrowOp: NostrSignerOp,
+    ): Boolean =
+        sessionKey(coordinate, narrowOp) in sessionAllows ||
+            sl.store.loadOpDecision(coordinate, narrowOp)?.let { sl.decide(coordinate, narrowOp) == NostrOpDecision.ALLOW } ?: false
+
+    /**
+     * The signer-ledger coordinate for [identity] under the current account. The signer permission
+     * store is shared with NIP-46, which already namespaces by account
+     * (`nip46:<signer>:<client>` — see Nip46PermissionAuthorizer.coordinateFor); this mirrors that so
+     * an "always allow" granted by one npub can never authorize signing under another. The bare
+     * [NappletIdentity.coordinate] stays the app's display/UI identity and is unchanged.
+     */
+    private fun signerCoordinateFor(identity: NappletIdentity): String = signerCoordinateFor(identity.coordinate)
+
+    /** [signerCoordinateFor] for a bare app coordinate — what the Connected Apps UI holds. */
+    private fun signerCoordinateFor(coordinate: String): String = NappletSignerKey.of(signer.pubKey, coordinate)
+
+    /**
+     * Namespaces an in-memory session grant to the applet that was actually prompted for. Mirrors
+     * `Nip46PermissionAuthorizer.sessionKey`; both authorizers share one process-wide instance, so
+     * the coordinate is what keeps one app's "allow for this session" from leaking to the rest.
+     */
+    private fun sessionKey(
+        coordinate: String,
+        op: NostrSignerOp,
+    ): String = "$coordinate|${op.key}"
+
+    /**
+     * Drops every live session grant held for [coordinate], so revoking an app takes effect
+     * immediately instead of lingering until this broker instance dies.
+     *
+     * [coordinate] is the **bare** app coordinate (`<author>:<identifier>`, or `browser:<origin>`)
+     * — the identity the Connected Apps UI holds. Session keys are stored under the
+     * account-namespaced [signerCoordinateFor] form, so this namespaces before matching; comparing
+     * the bare coordinate against those keys would silently match nothing and revoke nothing.
+     *
+     * Also clears any post-Cancel re-prompt suppression for the app: after an explicit revoke the
+     * user's next interaction should prompt, not be dropped by a cooldown from before.
+     */
+    suspend fun revokeSessionGrants(coordinate: String) {
+        signerConsentLock.withLock {
+            val prefix = "${signerCoordinateFor(coordinate)}|"
+            sessionAllows.removeAll { it.startsWith(prefix) }
+            cancelledUntil.remove(coordinate)
+        }
+    }
+
+    companion object {
+        /**
+         * How long (ms) a Cancel on the first-connect dialog suppresses re-prompting for the same app.
+         * Long enough to absorb the burst of requests a page/napplet fires on load without relaunching
+         * the dialog per request; short enough that a deliberate user retry seconds later prompts again.
+         */
+        private const val CANCEL_REPROMPT_COOLDOWN_MS = 3_000L
+        private const val RESOURCE_MAX_BYTES = 10L * 1024L * 1024L
+        private const val RESOURCE_MAX_URLS = 16
+    }
+}

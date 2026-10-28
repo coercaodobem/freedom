@@ -1,0 +1,42 @@
+<p><i>Amethyst</i> brings the best social network to your Android phone. Just insert your Nostr
+private key and start posting.</p>
+<p><a href='https://nostr.com/' target='_blank' rel='nofollow noopener'>Nostr</a>
+is an open protocol that is able to create a censorship-resistant global "social" network, transferring
+notes and other stuff using relays. It doesn't rely on any trusted central server, hence it is resilient;
+it is based on cryptographic keys and signatures, so it is tamperproof; it does not rely on P2P techniques,
+therefore it works.</p>
+<p><b>What you can do with Amethyst</b></p>
+<ul>
+<li>Post text, photos, videos, long-form articles, polls and voice notes to the relays you choose.</li>
+<li>Follow people, reply, repost, react and quote.</li>
+<li>Send private, end-to-end encrypted direct messages and join group chats.</li>
+<li>Browse dedicated feeds: articles, pictures, short videos, live streams, podcasts, music, communities,
+classifieds, calendars and more.</li>
+<li>Send and receive Bitcoin Lightning zaps.</li>
+<li>Track your training and share a workout &mdash; see below.</li>
+</ul>
+<p><b>My Fitness &mdash; track your training</b></p>
+<p>Amethyst includes a personal training dashboard. Open the left drawer and tap <i>My Fitness</i>,
+under <i>You</i>. It summarises the workouts you have logged in Amethyst, and &mdash; with your
+permission &mdash; the ones your watch or fitness app has already saved to Android Health Connect
+(Samsung Health, Google Fit, Fitbit, Garmin Connect, Strava and others all write there). It shows
+you:</p>
+<ul>
+<li>How much you trained this week, and whether that is up or down on last week.</li>
+<li>Your four-week weekly average for time, distance, steps and climb.</li>
+<li>Where your time goes &mdash; running, cycling, walking, hiking, swimming, rowing, the gym.</li>
+<li>Your best efforts: longest distance, longest workout, biggest climb, most steps, highest heart rate.</li>
+<li>How many days you trained, and your current streak of consecutive active days.</li>
+</ul>
+<p>All of it is computed on your phone and shown to you. Nothing is uploaded to produce it, and you
+never have to post anything to use it.</p>
+<p><b>Sharing a workout (optional)</b></p>
+<p>If you want to tell your followers about a particular session, tap <i>Share this workout</i> on any
+row. Amethyst opens a post pre-filled with that workout's figures; you review it and decide whether to
+publish. One workout at a time, always with your confirmation, never automatic.</p>
+<p>The Health Connect integration is read-only. Amethyst never writes to Health Connect, never reads in
+the background, never asks for your exercise route or location, and only ever looks at the last four
+weeks. You can revoke access in Health Connect at any time. Full details are in the privacy policy at
+<a href='https://github.com/vitorpamplona/amethyst/blob/main/PRIVACY.md' target='_blank' rel='nofollow noopener'>github.com/vitorpamplona/amethyst</a>.</p>
+<p>Amethyst is free and open source (MIT). There is no Amethyst server and no Amethyst account: your
+posts go straight to the Nostr relays you configure.</p>

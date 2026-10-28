@@ -1,0 +1,607 @@
+# Release Ops (Amethyst maintainers)
+
+This is the **operational checklist the Amethyst team follows to ship a
+release** — the account-specific, push-the-buttons side of cutting a version.
+The *generic* build/release mechanics (how the CI pipeline works, the asset
+naming contract, the secret names a fork must set, desktop packaging) live in
+[`BUILDING.md`](BUILDING.md). Read that first; this doc only covers what is
+specific to shipping the official Amethyst artifacts.
+
+> Forks: you do **not** need this file. `BUILDING.md` has everything you need to
+> build and release your own fork. This describes our accounts and channels.
+
+---
+
+## At a glance
+
+A release is one tag push that fans out to these distribution channels:
+
+| Channel | Mechanism | Who pushes |
+|---|---|---|
+| **GitHub Releases** | Automatic — the `Create Release Assets` workflow builds + signs everything on the `v*` tag | CI |
+| **Google Play** | **Manual** — download the signed AAB from the GH Release, upload in Play Console | Maintainer |
+| **F-Droid** | **Pull** — F-Droid's build server builds the `fdroid` flavor from source when it sees the new tag | F-Droid (we just maintain the recipe + metadata) |
+| **Accrescent** | **Manual** — upload the GH Release's signed `.apks` set in the Accrescent console | Maintainer |
+| **Zapstore** | `amy releases publish` signs the APK's NIP-82 events (as `zsp` did), reading `zapstore.yaml`, with Amethyst's nsec | Maintainer |
+| **Orchard** | The same `amy releases publish` run signs NIP-82 events naming the GitHub Release's `.flatpak` bundles | Maintainer |
+| **Desktop self-update** | The same `amy releases publish` run signs the NIP-82 events the desktop app updates from | Maintainer |
+| **Flathub** | **Not submitted yet.** Once accepted: a PR to the Flathub app repo with the regenerated source manifest | Maintainer, by hand (Flathub's AI policy) |
+| **Homebrew** | **Autobump** — BrewTestBot opens the `amethyst-nostr` cask and `amy` formula PRs itself; `scripts/bump-homebrew-cask.sh` only verifies | Homebrew (we verify) |
+| **Winget** | `scripts/bump-winget.sh` opens the `winget-pkgs` PR with your `gh` auth | Maintainer |
+
+The `quartz` library is not part of this release: it releases to Maven Central from its own
+repository, [vitorpamplona/quartz](https://github.com/vitorpamplona/quartz).
+
+---
+
+## 1. Pre-tag checklist
+
+1. **Bump the version** in `gradle/libs.versions.toml` — both keys:
+   ```toml
+   app     = "1.12.1"   # semver, drives every module + the tag
+   appCode = "449"      # Android versionCode, monotonic — must increment
+   ```
+   That single edit propagates to Android (`versionName`/`versionCode`),
+   Desktop & CLI (`packageVersion`) and `geode`
+   (`RelayInfo.VERSION`). Nothing else hardcodes the version.
+
+2. **Write the changelog** as `docs/changelog/vMAJOR.MINOR.PP.md` (zero-padded,
+   e.g. `v1.12.01.md`) and add it to `docs/changelog/README.md`. Follow the
+   house style: plain text, short verb-first sentences.
+
+   For the `## Contributors` section, generate the credits from git instead of
+   writing them by hand:
+   ```bash
+   scripts/contributors.sh
+   ```
+   It lists the commit authors and `Co-authored-by` trailers since the last
+   release tag, resolved to npubs through `docs/changelog/github.json`
+   (`mappings` by GitHub username, `aliases` for other names and emails a
+   person commits under, `ignore` for AI co-authors and bots). Anyone it can't
+   resolve is listed under `UNMAPPED` with a commit count — credit them by hand,
+   then add their npub or an alias so future releases pick them up. Pass
+   `--from`/`--to` to rebuild an older release's list.
+
+   For the `## Translations` section, generate the credits instead of writing
+   them by hand — no token needed:
+   ```bash
+   scripts/translators.sh
+   ```
+   This runs offline. It reads `docs/changelog/translators.json` (kept next to
+   the changelogs), which CI keeps fresh: the Crowdin sync workflow's
+   `seed-translators` job records everyone who has translated since the last `v*`
+   tag, with their languages, in the file's `sinceLastTag` list, and accumulates
+   their npubs in the forever-growing `mappings` registry. The script resolves
+   that list to npubs and prints the `## Translations` block, one line per
+   translator with all their languages. Usernames under `ignore` (the account
+   that uploads machine translations) are left out, so credit translations that
+   arrived through git rather than Crowdin by hand.
+   Contributors with no npub yet are listed under `UNMAPPED` — credit them by
+   hand, then add their npub under `mappings` so future releases pick them up
+   automatically. (To re-query Crowdin live as a sanity check, run
+   `scripts/translators.sh --seed` with `CROWDIN_PROJECT_ID` /
+   `CROWDIN_PERSONAL_TOKEN` set, which refreshes the file.)
+
+3. **Publish the release-notes note on Nostr** — *minor releases only.* In
+   practice this id has only ever been bumped on `x.y.0` (1.11.0, 1.12.0,
+   1.13.0); patch releases leave it pointing at their minor's note. Publish with
+   Amethyst's account and paste the event id into `amethyst/build.gradle.kts`:
+   ```kotlin
+   buildConfigField("String", "RELEASE_NOTES_ID", "\"<new-event-id-hex>\"")
+   ```
+   This id is what the in-app drawer's "Release Notes" link and the donation
+   card open (`DrawerContent.kt`, `ShowDonationCard.kt`). It must point at the
+   note for *this* version, so publish the note **before** tagging and commit
+   the new id together with the version bump.
+
+   <!-- TODO(maintainer): document the exact command/account used to publish the
+        release-notes note (which signer, which relays). -->
+
+4. **Add the release to the Linux metainfo**: a new first entry in `<releases>`
+   of `desktopApp/packaging/flatpak/com.vitorpamplona.amethyst.Amethyst.metainfo.xml`
+   (`<release version="1.12.1" date="YYYY-MM-DD">` with a `details` URL to the
+   GitHub release, as the existing entries do). If you forget, release CI
+   prints a warning and injects a bare entry, but only into the bundle it
+   builds: AppStream readers like Flathub take the history from the source
+   tree.
+
+5. **Sanity-build locally** (optional but cheap): `./gradlew assembleRelease`
+   and a desktop `packageDistributionForCurrentOS`, or run the workflow's
+   dry-run (see BUILDING.md § Dry-run).
+
+---
+
+## 2. Cut the release
+
+Commit, tag, push — see [`BUILDING.md` § Release runbook](BUILDING.md#release-runbook)
+for the exact commands. The tag must equal `app` from the catalog (the workflow
+asserts this and fails fast otherwise). A clean `vMAJOR.MINOR.PATCH` tag is
+classified **stable** and runs the Homebrew/Winget bump workflows; anything with
+a `-rc`/`-beta`/`-alpha`/`-dev` suffix is a prerelease and skips them.
+
+Heads-up on the `git push`: this repo has `git-credential-manager` configured as
+a credential helper, and it blocks on an interactive prompt (a plain
+`GIT_TERMINAL_PROMPT=0` does **not** stop it — the push just hangs). If that
+happens, push using `gh`'s helper for the one command:
+
+```bash
+git -c credential.helper= -c credential.helper='!gh auth git-credential' push upstream main
+```
+
+When the `Create Release Assets` workflow finishes (~25–30 min) the GH Release
+holds **49 assets**, per the asset-name contract:
+
+- **Android (15):** 5 Google Play APKs + 5 F-Droid APKs + 2 AABs + the F-Droid
+  `.apks` set for Accrescent + the 2 R8 mappings
+  (`amethyst-googleplay-*-v…apk` / `.aab`, `amethyst-fdroid-*-v…apk` / `.aab` / `.apks`,
+  `amethyst-{googleplay,fdroid}-mapping-v….txt.gz`)
+- **Desktop (14):** macOS DMG (**arm64 only** — there is no Intel DMG), Windows
+  MSI (x64 only — **no arm64 MSI**) + portable zip (x64, arm64), and Linux
+  DEB/RPM/AppImage/flatpak/tar.gz in both x64 and arm64. BUILDING.md § Release
+  runbook has the per-leg breakdown and why the two gaps exist.
+- **CLI (10):** the `amy` artifacts — the no-JRE `jvm.tar.gz`, macOS arm64,
+  Windows x64 + arm64, and Linux DEB/RPM/tar.gz in both x64 and arm64
+- **Relay (10):** the `geode` artifacts, same matrix as `amy`. The geode Docker
+  image is **not** a release asset — it goes to the registry, so don't count it
+  here.
+
+---
+
+## 3. Per-channel shipping
+
+### GitHub Releases — automatic
+Nothing to do beyond pushing the tag. Verify the asset count (BUILDING.md
+§ Verify). macOS is **arm64-only** — there is no Intel DMG, so a single
+`amethyst-desktop-<version>-macos-arm64.dmg` is the expected, correct result.
+
+Two of those assets are the R8 mapping files
+(`amethyst-{googleplay,fdroid}-mapping-<version>.txt.gz`). Do not prune them
+from old releases — they are the only way to read a crash report from a build
+that old (§ 7).
+
+### Google Play — manual upload
+1. Download `amethyst-googleplay-<version>.aab` from the GH Release.
+2. Play Console → app `com.vitorpamplona.amethyst` → **Production** (or the
+   staged-rollout track we're using) → create release → upload the AAB.
+3. The release notes field can reuse the `docs/changelog` text.
+4. Roll out.
+
+### Accrescent — manual upload
+Accrescent takes neither AABs nor single APKs: it wants a signed set of split APKs. The release
+workflow builds it from the `fdroid` flavor with bundletool and signs it with the release keystore
+(the "Build Accrescent APK set" step), and warns when it is over Accrescent's 128 MiB limit.
+Accrescent has no publish API, so:
+
+1. Download `amethyst-fdroid-v<version>.apks` from the GH Release.
+2. Upload it in the [Accrescent console](https://console.accrescent.app).
+
+### F-Droid — pull / build-from-source
+F-Droid does **not** accept an upload from us. Its build server polls the repo,
+and when it sees the new `v*` tag it builds the **`fdroid` product flavor** from
+source (reproducibly) per the recipe in the separate
+[`fdroiddata`](https://gitlab.com/fdroid/fdroiddata) repo
+(`metadata/com.vitorpamplona.amethyst.yml`), then signs and publishes to the
+F-Droid repo on its own cadence.
+
+What we own to keep that working:
+- The **`fdroid` flavor** (`amethyst/src/fdroid/…`) must stay free of
+  proprietary deps — it swaps Firebase/Google services for UnifiedPush and
+  no-op/open implementations (ML Kit, writing assistant, push). Google-only
+  libraries live behind the `play` flavor.
+- The fastlane metadata under `fastlane/metadata/android/` (descriptions,
+  images). F-Droid reads per-version changelogs from
+  `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` if present —
+  add one (e.g. `449.txt`) when we want a changelog shown on F-Droid; otherwise
+  none is displayed.
+- The `AutoUpdateMode`/`UpdateCheckMode` in the fdroiddata recipe tracks tags,
+  so a correct `vX.Y.Z` tag + bumped `versionCode` is usually all F-Droid needs.
+
+After a release, just confirm F-Droid picked up the new version (it can lag a
+few days): <https://f-droid.org/packages/com.vitorpamplona.amethyst/>.
+
+### Nostr releases — `amy releases publish` with Amethyst's nsec
+One command announces the release on Nostr (NIP-82) for three readers, each under its own app id:
+
+- **Zapstore** ([zapstore.dev](https://zapstore.dev/)) installs and updates the APK from events
+  under `com.vitorpamplona.amethyst`. `amy` writes them tag for tag as
+  [`zsp`](https://github.com/zapstore/zsp) did, reading the same [`zapstore.yaml`](zapstore.yaml),
+  so installs Zapstore made keep updating.
+- **Orchard** ([github.com/Letdown2491/orchard](https://github.com/Letdown2491/orchard)), a Flatpak
+  store over Nostr, installs the GitHub Release's `.flatpak` bundles from events under
+  `com.vitorpamplona.amethyst.Amethyst` (§ Orchard).
+- **The desktop app** updates itself from events under `com.vitorpamplona.amethyst.desktop`.
+  Until they are out, a desktop user only hears about the new version from GitHub, with a link to
+  the download page; the app never installs a file a signed release does not name
+  (`desktopApp/plans/2026-10-15-desktop-self-update-study.md`).
+
+The three share the key and the event kinds, so they must never share an app id: one publish would
+replace another's release.
+
+**Each release**, after the GH Release assets exist, publish from the repo root (for
+`zapstore.yaml`) with an `amy` at least as new as the release. The Homebrew `amy` lags until
+BrewTestBot merges its bump, so build it from the tag (`./gradlew :cli:installDist`, then
+`cli/build/install/amy/bin/amy`) or take `amy-X.Y.Z-*` from the release. Older builds miss what the
+readers now require: the release's `f` (platform) tags, which relay.zapstore.dev refuses a release
+without, and the `Content-Digest` header cdn.zapstore.dev refuses an upload without.
+
+Keep Amethyst's key in its own amy account, so your personal account stays the default, and log
+in to it in your own terminal, never through an agent's shell, whose commands and output it keeps:
+
+```bash
+amy --account amethyst login <nsec | ncryptsec --password …>   # once
+amy --account amethyst whoami   # npub142gywvjkq0dv6nupggyn2euhx4nduwc7yz5f24ah9rpmunr2s39se3xrj0
+```
+
+amy hashes every file it names, so it needs them on disk, and the desktop installers are about
+3 GB. Publish one app at a time, each from its own folder; the desktop step can wait for a fast
+connection:
+
+```bash
+NOTES=docs/changelog/vX.Y.ZZ.md
+# Zapstore: the arm64 APK (~60 MB)
+gh release download vX.Y.Z --pattern 'amethyst-googleplay-arm64-v8a-*.apk' --dir /tmp/release-vX.Y.Z/android
+amy --account amethyst releases publish /tmp/release-vX.Y.Z/android --only android --version X.Y.Z --notes-file $NOTES --blossom https://cdn.zapstore.dev --dry-run
+# Orchard: the two Flatpak bundles (~0.5 GB)
+gh release download vX.Y.Z --pattern 'amethyst-desktop-*.flatpak' --dir /tmp/release-vX.Y.Z/flatpak
+amy --account amethyst releases publish /tmp/release-vX.Y.Z/flatpak --only flatpak --version X.Y.Z --notes-file $NOTES --dry-run
+# Desktop self-update: the 12 installers (~3 GB)
+gh release download vX.Y.Z --pattern 'amethyst-desktop-*' --dir /tmp/release-vX.Y.Z/desktop
+amy --account amethyst releases publish /tmp/release-vX.Y.Z/desktop --only desktop --version X.Y.Z --notes-file $NOTES --dry-run
+```
+
+Read each dry run (`--json` prints the signed events), then run the same command without
+`--dry-run`. The desktop download also brings the `.flatpak` bundles; `--only desktop` skips them.
+
+For each app with files in the folder, it signs one kind 3063 asset per file, then the kind 30063
+release that names them, and publishes to that app's relays. `--listing` also (re)publishes the kind 32267 listing: do it when
+`zapstore.yaml` (Android), `FlatpakRelease` (Flatpak) or `DesktopReleaseEvents` (desktop)
+changes, and the first time for the desktop.
+
+- **Android:** by default the googleplay arm64-v8a APK, the one `zsp` picked and the only platform
+  Zapstore installs for (`--android-flavor`, `--android-abis` choose others). Each APK is checked
+  with apksig (signature, package, version) and tagged with `version_code`, the SDK range, its ABIs,
+  `apk_certificate_hash`, the `variant` and the `supported_nips` from `zapstore.yaml`.
+  `--blossom https://cdn.zapstore.dev` mirrors the APK there as a second URL, and for `--listing`
+  uploads the icon and screenshots, as `zsp` did. Relays: `relay.zapstore.dev` (the one the
+  Zapstore app reads), `nos.lol`, `nostr.mom` and `vitor.nostr1.com`.
+- **Flatpak:** both `amethyst-desktop-X.Y.Z-linux-*.flatpak` bundles, each checked to be this app
+  for its arch by the ref in its header, with its GitHub URL, SHA-256, size, arch and
+  `application/vnd.flatpak`, in one release. Relays: `FlatpakRelease.RELAYS` (`relay.orchard.rocks`
+  is the one Orchard reads).
+- **Desktop:** every `amethyst-desktop-X.Y.Z-*` file the app installs (DMG, MSI, both zips, both
+  AppImages, both tarballs, the .debs and .rpms; not the Flatpak bundles or `.zsync` files), with
+  its GitHub URL, SHA-256, size, platform and MIME type. Relays: `DesktopRelease.RELAYS`.
+
+It refuses any key but Amethyst's. A prerelease version (anything but `X.Y.Z`, as the release
+workflow classifies tags) goes out on the `beta` channel, which none of the readers installs from.
+`--only android`, `--only flatpak` or `--only desktop` publishes one app.
+
+`zsp publish` still works for the APK if `amy` is unavailable: it reads the same `zapstore.yaml`,
+with the relays in the `RELAY_URLS` env var. It needs zsp 0.4.8 or later: older versions put the
+platform only on the asset, and relay.zapstore.dev refuses their release ("platform must include
+android-arm64-v8a").
+
+### Orchard
+Orchard (0.2.0 and later) downloads the bundle from the asset's URL, checks it against the signed
+SHA-256 and installs it with `flatpak install --bundle`; an update installs the new bundle over the
+old one. There is nothing to build or host beyond the GitHub Release. Orchard 0.1.x only installed
+OCI images, which `orchard-publish` pushed to `ghcr.io/vitorpamplona/amethyst-flatpak` for 1.19.0;
+the 1.19.0 events still point there, so leave that package until a later release is out, then it
+can be deleted.
+
+The bundle is built on the Flatpak branch `master`; the 1.19.0 image was `stable`. Someone who
+installed 1.19.0 from Orchard gets the bundle as a second branch beside the image's on the next
+update; `flatpak uninstall com.vitorpamplona.amethyst.Amethyst//stable` removes the old one.
+
+**One-time setup.** `orchard.txt` at the repo root names Amethyst's npub. Orchard reads it from the
+default branch to show the repository link as verified. Update it if the signing key ever changes.
+
+### Flathub — not submitted yet
+
+Amethyst is not on Flathub. The source-build manifest that a submission would
+use lives in
+[`desktopApp/packaging/flatpak/flathub/`](desktopApp/packaging/flatpak/flathub/),
+and [its README section](desktopApp/packaging/flatpak/README.md#flathub) lists
+what is still missing (AI disclosure, domain verification, a tag whose metainfo
+has the screenshot). Until then there is nothing to ship here; the steps below
+are for once Flathub has created `flathub/com.vitorpamplona.amethyst.Amethyst`.
+
+**Flathub's AI policy.** These files were written with Claude Code. Flathub
+forbids AI tools from opening or automating its PRs and from writing their
+descriptions or review replies, so a person opens each update PR there and
+answers the review. An agent may prepare the files in this repo.
+
+**Each release**, after the tag is pushed:
+
+1. Regenerate the Maven list from a real online build of the tag, both arches
+   in Docker (about 35 minutes; work files go to `build/flathub-regen/`):
+   ```bash
+   desktopApp/packaging/flatpak/flathub/tools/regenerate-gradle-sources.sh vX.Y.Z
+   ```
+   It rewrites `gradle-sources.json` and prints the tag tarball's sha256.
+2. In `flathub/com.vitorpamplona.amethyst.Amethyst.yml`, point the `archive`
+   source at the tag's URL and that sha256. When the JetBrains Runtime moves
+   (`JBR_BUILD` in the regenerate script and the two `jbrsdk` sources), bump
+   both and their sha256s together.
+3. Build and lint it locally (below), commit the three files here, then copy
+   the manifest, `flathub-offline.init.gradle` and `gradle-sources.json` into a
+   PR to the Flathub app repo. Flathub's update bot can bump a URL, but not
+   regenerate the Maven list, so every release is this manual PR.
+
+**Testing locally.** `flatpak-builder` needs Linux; on macOS run it in a
+privileged Debian container (`flatpak flatpak-builder elfutils` installed, the
+freedesktop 26.08 Platform and Sdk from Flathub). From the `flathub/` directory:
+
+```bash
+flatpak-builder --force-clean --repo=repo --mirror-screenshots-url=https://dl.flathub.org/media/ \
+  builddir com.vitorpamplona.amethyst.Amethyst.yml          # add --disable-rofiles-fuse in Docker
+ostree commit --repo=repo --canonical-permissions \
+  --branch=screenshots/$(flatpak --default-arch) builddir/files/share/app-info/media
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest com.vitorpamplona.amethyst.Amethyst.yml
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+```
+
+The build step has no network, so a Maven file missing from
+`gradle-sources.json` fails Gradle's resolution there. Expected noise: built
+with Debian's `flatpak-builder`/AppStream, the repo lint reports
+`appstream-external-screenshot-url` and `appstream-remote-icon-not-mirrored`,
+because that AppStream writes media paths relative to `media_baseurl`, while
+the linter wants the full `dl.flathub.org/media` URLs Flathub's own builder
+writes. Anything else it reports is real. Then install it and run it:
+
+```bash
+flatpak remote-add --user --no-gpg-verify amethyst-local repo
+flatpak install --user amethyst-local com.vitorpamplona.amethyst.Amethyst
+flatpak run com.vitorpamplona.amethyst.Amethyst
+```
+
+The app should open, and `lib/Amethyst/lib/runtime/lib/libawt_wlawt.so` should
+be in the installed tree (JBR's Wayland toolkit). `builddir/`, `repo/` and
+`.flatpak-builder/` are gitignored.
+
+### Homebrew + Winget
+
+The in-repo sync workflows (`bump-homebrew.yml`, `bump-homebrew-formula.yml`,
+`bump-homebrew-geode-formula.yml`, `bump-winget.yml`) keep the reference
+packaging files current. Upstream:
+
+| Channel | Upstream package | State |
+|---|---|---|
+| **Homebrew cask** | `Homebrew/homebrew-cask` → `amethyst-nostr` | **Live, autobumped** — BrewTestBot opens the version PR (v1.17.0: [#292108](https://github.com/Homebrew/homebrew-cask/pull/292108)) |
+| **Homebrew formula** | `Homebrew/homebrew-core` → `amy` | **Live, autobumped** — BrewTestBot opens and merges the version PR (v1.17.0: [#315679](https://github.com/Homebrew/homebrew-core/pull/315679)) |
+| **Homebrew formula** | `Homebrew/homebrew-core` → `geode-relay` | Not submitted — renamed from `geode`, which is permanently reserved for Apache Geode |
+| **Winget** | `microsoft/winget-pkgs` → `VitorPamplona.Amethyst` | **Live** — initial [PR #422752](https://github.com/microsoft/winget-pkgs/pull/422752) merged 2026-09-23; bumped per release by `scripts/bump-winget.sh` |
+
+**Homebrew is autobumped.** Both packages are on Homebrew's autobump list
+(`autobump: true` in `https://formulae.brew.sh/api/cask/amethyst-nostr.json` and
+`…/api/formula/amy.json`), so BrewTestBot opens each version-bump PR itself,
+roughly every 3 hours after the release, and `brew bump-cask-pr` **refuses** to
+open a competing one. There is nothing to push. What BrewTestBot does not do is
+check our DMG: it computes its own sha256 and never looks at notarization. So
+`scripts/bump-homebrew-cask.sh` now verifies instead of submitting — it
+re-checks the live DMG's sha256 and stapled notarization ticket, finds
+BrewTestBot's PR, and fails if the sha256 in that PR differs from ours. It
+needs no token. Only if Homebrew ever drops the cask from autobump does it fall
+back to `brew bump-cask-pr`, which needs `HOMEBREW_GITHUB_API_TOKEN` (classic
+PAT, `repo` scope) in your shell.
+
+The state above is a snapshot; re-check before assuming. Two calls answer it:
+`gh api repos/microsoft/winget-pkgs/contents/manifests/v/VitorPamplona` and
+`curl -s -o /dev/null -w '%{http_code}' https://formulae.brew.sh/api/cask/amethyst-nostr.json`
+(404 = still absent).
+
+Two separate faults kept this invisible until v1.13.1, both now fixed:
+
+1. **The workflows never ran at all** — for *any* release. They triggered on
+   `release: types: [released]`, and GitHub does not raise workflow-triggering
+   events for a release created by `GITHUB_TOKEN`, which is exactly how
+   `create-release.yml` creates it. They now trigger on `workflow_run` after
+   `Create Release Assets` succeeds, which also fixes a latent race — the old
+   event fired while assets were still uploading.
+2. **Nothing exists upstream to bump.** `brew bump-cask-pr` and
+   `winget-releaser` can only *update* an existing package. The first
+   submission is a manual, human-reviewed PR: BUILDING.md § Homebrew cask
+   (one-time initial PR) and § Winget (one-time initial submission).
+
+CI does the bookkeeping with `GITHUB_TOKEN` only — verifying the artifact,
+computing hashes, and opening an in-repo PR syncing the reference packaging
+files. After merging those sync PRs, a maintainer runs:
+
+```bash
+git pull                                     # the scripts read the merged files
+scripts/bump-homebrew-cask.sh v1.20.0        # verify only; BrewTestBot opens the PR
+scripts/bump-winget.sh v1.20.0               # opens the winget-pkgs PR; uses your `gh` auth
+```
+
+Both scripts re-verify the published artifact's sha256 first, and the Homebrew
+one also refuses a DMG without a stapled notarization ticket. Run the Homebrew
+one again later if BrewTestBot has not opened its PR yet. See BUILDING.md
+§ Package-manager credentials.
+
+All four in-repo sync workflows (`amy` formula, `geode` formula,
+`amethyst-nostr` cask, winget manifests) open PRs against *this* repo on every
+release. Merge them to keep the reference packaging files current.
+
+---
+
+## 4. Operated infrastructure
+
+### Push notification server
+
+The Google Play (FCM) flavor delivers push through a server we operate at
+`push.amethyst.social`, built from
+[`vitorpamplona/amethyst-push-notif-server`](https://github.com/vitorpamplona/amethyst-push-notif-server).
+It registers devices, watches their NIP-65 inbox / NIP-17 DM relays, and sends
+wake-up pushes.
+
+- **`play` flavor** → push via this server (Firebase/FCM).
+- **`fdroid` flavor** → UnifiedPush through a distributor app the user installs
+  (e.g. ntfy); it does **not** use our server.
+- Both are complemented by the on-device always-on `NotificationRelayService`
+  (see [`PULL_NOTIFICATION.md`](PULL_NOTIFICATION.md)), which keeps the user's
+  relay connections alive without any push server at all.
+
+The push server has its **own repo, deploy, and release cadence** — a normal app
+release does **not** redeploy it. Coordinate a server deploy only when the app
+changes the registration/push contract (token format, payload, or endpoint), so
+the running server stays compatible with the shipped app.
+
+<!-- TODO(maintainer): document the push-server deploy steps + hosting, and
+     which app-side changes require a coordinated push-server deploy. -->
+
+---
+
+## 5. Secrets ownership & rotation
+
+The workflow's required secrets and what they sign are inventoried generically
+in [`BUILDING.md` § Secrets](BUILDING.md#secrets-the-ci-needs). Amethyst-specific
+ownership:
+
+| Secret(s) | Protects | Rotation |
+|---|---|---|
+| `SIGNING_KEY`, `KEY_ALIAS`, `KEY_STORE_PASSWORD`, `KEY_PASSWORD` | The **Android upload keystore** — losing/leaking it is the worst case; Play app signing identity | Keep the keystore backed up offline; never rotate casually (Play upload key reset is a support process) |
+| `SONATYPE_USERNAME`, `SONATYPE_PASSWORD`, `SIGNING_PRIVATE_KEY`, `SIGNING_PASSWORD` | Nothing here any more: they published `quartz` to Maven Central, which now releases from vitorpamplona/quartz. No workflow in this repo reads them | Delete from this repo's secrets |
+| *(none for Homebrew/Winget)* | — | Homebrew is autobumped by BrewTestBot, and `scripts/bump-winget.sh` runs on a maintainer's machine with `gh` auth, so neither channel needs a CI secret. See BUILDING.md § Package-manager credentials |
+| `CROWDIN_PERSONAL_TOKEN`, `CROWDIN_PROJECT_ID` | Translation sync | On compromise |
+
+Owner assignments and rotation reminders live with the team (issue tracker).
+
+<!-- TODO(maintainer): name the owner per secret and where backups live. -->
+
+---
+
+## 6. Post-release verification
+
+- [ ] GH Release: 49 assets, sizes sane, and the asset-name set matches the
+      previous release (see the `diff` one-liner in BUILDING.md § Release
+      runbook). macOS is arm64-only — do **not** look for an Intel DMG.
+- [ ] Play Console: rollout started, no policy rejection.
+- [ ] Accrescent: the `.apks` upload passed the console's checks.
+- [ ] Zapstore: release event visible.
+- [ ] Orchard: the Amethyst row shows the new version, and its repository link
+      wears the check (the `orchard.txt` proof).
+- [ ] F-Droid: new version detected (may lag days).
+- [ ] Flathub (only once Amethyst is on Flathub): the app-repo PR with the
+      regenerated `gradle-sources.json` is merged and Flathub's build is green.
+- [ ] Four sync PRs opened against this repo (`amy` formula, `geode` formula,
+      `amethyst-nostr` cask, winget manifests) — merge them.
+- [ ] Homebrew: `scripts/bump-homebrew-cask.sh vX.Y.Z` passes — DMG verified and
+      BrewTestBot's cask PR carries the same sha256 (no token; re-run later if
+      the bot has not opened it yet). `amy` needs nothing: BrewTestBot bumps it.
+- [ ] Winget pushed upstream: `scripts/bump-winget.sh vX.Y.Z` (manual, no token —
+      uses your `gh` auth).
+- [ ] In-app "Release Notes" link opens the note matching `RELEASE_NOTES_ID`
+      (only bumped on minor releases — patches keep pointing at the x.y.0 note).
+- [ ] Push still works on a `play` build (only if the push contract changed —
+      see § 4); UnifiedPush still works on an `fdroid` build.
+
+If anything ships broken, see [`BUILDING.md` § Incident response](BUILDING.md#incident-response).
+
+---
+
+## 7. Crash reports & retrace
+
+Release builds are minified **and obfuscated** (they have to be: Play Console
+drops apps whose DEX is under 25% optimized or obfuscated out of store surfaces
+— see `amethyst/proguard-rules.pro` for the whole story). So a raw stack trace
+from a release build looks like this:
+
+```
+java.lang.IllegalStateException: something blew up
+	at onh.B(r8-map-id-12c710927a584543dbe1e2e867db95460bc44482efe53283f86798648c1cfc00:7)
+```
+
+That is not lost information, it is encoded information. Paste the report in and
+run it:
+
+```bash
+scripts/retrace.sh crash-report.txt
+pbpaste | scripts/retrace.sh            # or straight off the clipboard
+```
+
+Nothing else to supply. A report's first line names its own build —
+`java.lang.IllegalStateException: 1.16.0-PLAY` — so the script resolves the tag
+(`v1.16.0`) and the flavor (`PLAY` → `googleplay`), downloads that release's
+mapping asset and caches it. For a bare stack trace with no such header, name
+the build yourself with `--release v1.16.0 --flavor play`; for a build you made
+locally, pass its `mapping.txt` directly.
+
+```
+java.lang.IllegalStateException: something blew up
+	at androidx.compose.foundation.text.input.TextFieldCharSequence.getText(TextFieldCharSequence.kt:58)
+	at androidx.compose.foundation.text.input.TextFieldState.getText(TextFieldState.kt:146)
+	at com.vitorpamplona.amethyst.ui.screen.loggedIn.home.ShortNotePostViewModel.onMessageChanged(ShortNotePostViewModel.kt:1727)
+```
+
+Note that retrace gave back **three** frames where the crash reported one: R8
+had inlined two of them. That is worth internalising — it is the reason a raw
+trace's line number cannot be trusted even in the pre-obfuscation builds, where
+optimization was already inlining. Retracing is not a tax obfuscation imposed;
+it is how you read an optimized build at all.
+
+**The wrong mapping is worse than none** — it produces confident, wrong names.
+So the script refuses to guess: the `r8-map-id-<hash>` in the trace *is* the
+`pg_map_id` header of the mapping that built it, and the two are compared before
+anything is printed:
+
+```
+error: this mapping did not build this report.
+       report:  deadbeef...
+       mapping: 12c71092... (amethyst-googleplay-mapping-v1.16.0.txt.gz)
+```
+
+`--force` overrides if you really mean it. (`googleplay` vs `fdroid` matters —
+the two flavors are separate R8 runs with different mappings.)
+
+**Per channel:**
+
+| Where the report came from | What to do |
+|---|---|
+| Play Console / Android vitals | Nothing. AGP embeds the mapping in the `.aab` (`BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`), so Play deobfuscates automatically. |
+| A NIP-17 DM from the in-app crash reporter, a GitHub issue, F-Droid, Zapstore, Accrescent | `scripts/retrace.sh <report>` — it reads the build off line 1 and fetches the mapping. |
+| A build you made locally | `scripts/retrace.sh amethyst/build/outputs/mapping/<variant>/mapping.txt report.txt` |
+
+`scripts/retrace.sh` downloads the R8 version named in the mapping's own header
+from Google's Maven and caches it, so it needs no pinned tooling and keeps
+working across AGP bumps. It needs no `gh` auth either — release assets on a
+public repo are plain HTTPS downloads.
+
+Two details of the report format in `ReportAssembler` exist for this and should
+not be "tidied" away: the headline carries the **fully qualified** exception
+class (a bare `simpleName` obfuscates to `a`, which retrace cannot resolve
+because it has no package), and stack frames are written as `    at <frame>`
+(retrace only rewrites frames it recognises, and it recognises them by the
+leading `at`). The script repairs the missing `at` on reports from older builds,
+but new reports should not need repairing.
+
+**Do not delete mapping assets from old releases.** They are the only copy —
+CI's are gone when the job ends, and a mapping cannot be regenerated after the
+fact (it would need a bit-identical rebuild, and R8's renaming is not stable
+across runs).
+
+### Did obfuscation break anything?
+
+R8 cannot see reflection, so nothing in the build tells you that a keep rule
+stopped matching. `tools/r8-verify/reflection-contract.txt` lists every place
+something outside the DEX resolves a name at runtime — JNI symbols, Jackson DTO
+field names, enum constants persisted in DataStore, WorkManager's stored worker
+class names, the Cast `OptionsProvider` named in a manifest `<meta-data>` value
+— and the release workflow asserts each one against what R8 actually emitted,
+for both flavors, before any asset is collected:
+
+```bash
+python3 tools/r8-verify/verify_reflection_contract.py \
+    amethyst/build/outputs/mapping/playRelease/
+```
+
+Run it on any local minified build too. It takes under a second and needs no
+device.
+
+**Adding reflection means adding two things**: the keep rule, and a line in the
+contract. A rule with no contract line is unverified and will rot silently.
+
+What this does *not* cover is reflection nobody wrote down. For that the honest
+controls are a staged Play rollout (the crash reporter retraces itself now, so
+a break is legible within hours) and exercising NIP-47 wallet connect, NIP-46
+bunker login, Tor, scheduled posts and a settings round-trip on a minified
+build before shipping.

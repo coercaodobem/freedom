@@ -1,0 +1,1228 @@
+name: Create Release Assets
+
+on:
+  push:
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: build assets but do not publish to GH Release or trigger bump workflows'
+        type: boolean
+        default: false
+      test_tag:
+        description: 'Synthetic tag name for dry-run (e.g. vX.YY.Z-dryrun); ignored on tag push'
+        type: string
+        default: 'v0.0.0-dryrun'
+
+permissions:
+  contents: write
+
+env:
+  # Asset naming contract: amethyst-desktop-<version>-<family>-<arch>.<ext>
+  # Single source of truth in scripts/asset-name.sh.
+  # appimagetool pinned release — bump via Dependabot, verify SHA256 via env var below.
+  # We used to use linuxdeploy here, but it auto-walks the AppDir with ldd to
+  # bundle deps — that fights jpackage's self-contained JRE (libjvm.so has
+  # $ORIGIN RPATH so ldd can't resolve it standalone). appimagetool only
+  # embeds the AppDir as-is, which is what we actually want.
+  #
+  # Both arch binaries come from the same appimagetool release so their SHA256
+  # values move in lockstep on version bumps.
+  APPIMAGETOOL_VERSION: '1.9.0'
+  APPIMAGETOOL_SHA256_X86_64: 46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1
+  APPIMAGETOOL_SHA256_AARCH64: 04f45ea45b5aa07bb2b071aed9dbf7a5185d3953b11b47358c1311f11ea94a96
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Desktop build matrix. Each leg uploads directly to the GH Release via
+  # softprops/action-gh-release@v2 (upsert by tag_name). No artifact round-trip.
+  # ---------------------------------------------------------------------------
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux legs run on x64 and arm64 GitHub-hosted runners (the
+        # ubuntu-24.04-arm label is a standard free public-repo runner as of
+        # early 2025). Windows arm64 uses windows-11-arm, added to the free
+        # public-repo runner catalogue in 2025 (4 vCPU / 16 GB / arm64).
+        # jpackage / jlink / Compose Multiplatform 1.11 all produce
+        # host-native artifacts — no cross-compilation needed.
+        #
+        # The arm64 Windows leg builds the portable .zip ONLY — no MSI.
+        # jpackage --type msi shells out to WiX 3's heat/candle/light, and the
+        # windows-11-arm runner image ships no WiX (the windows-latest image
+        # has WiX 3.14 preinstalled, which is why the x64 leg can package an
+        # MSI). Installing it here would mean pulling an archived, x86-only
+        # toolchain (wixtoolset/wix3 was archived in Feb 2025; WiX 4+ dropped
+        # the candle/light CLI that JDK 21's jpackage requires) into the job
+        # that publishes signed release assets. The portable zip is the
+        # documented Windows install path for amy/geode already, so arm64
+        # Windows users get that until either the runner image gains WiX or
+        # jpackage learns the WiX 4+ CLI.
+        include:
+          - { os: macos-15,         arch: arm64, family: macos,          tasks: "packageReleaseDmg" }
+          - { os: windows-latest,   arch: x64,   family: windows,        tasks: "packageReleaseMsi createReleaseDistributable" }
+          - { os: windows-11-arm,   arch: arm64, family: windows,        tasks: "createReleaseDistributable" }
+          - { os: ubuntu-latest,    arch: x64,   family: linux,          tasks: "packageReleaseDeb packageReleaseRpm" }
+          - { os: ubuntu-24.04-arm, arch: arm64, family: linux,          tasks: "packageReleaseDeb packageReleaseRpm" }
+          - { os: ubuntu-latest,    arch: x64,   family: linux-portable, tasks: "createReleaseAppImage createReleaseDistributable" }
+          - { os: ubuntu-24.04-arm, arch: arm64, family: linux-portable, tasks: "createReleaseAppImage createReleaseDistributable" }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60  # linux-portable leg also downloads the freedesktop runtime + builds the Flatpak bundle
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Linux legs build on the JetBrains Runtime: jlink/jpackage bundle the JDK Gradle runs on,
+      # and only JBR's AWT can draw natively on Wayland (WLToolkit; see
+      # desktopApp/.../platform/WaylandDisplay.kt). macOS and Windows keep Temurin.
+      - name: Set up JDK 21 (JetBrains Runtime)
+        if: startsWith(matrix.family, 'linux')
+        uses: ./.github/actions/setup-jbr
+
+      - name: Set up JDK 21
+        if: ${{ !startsWith(matrix.family, 'linux') }}
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Resolve tag + version
+        id: ver
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          TEST_TAG: ${{ github.event.inputs.test_tag || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${TEST_TAG:-v0.0.0-dryrun}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VER="${TAG#v}"
+          TOML_VER=$(grep -E '^app\s*=' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          # On dry-run we only require that TOML has a version; on real tag push we require exact match.
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            if [[ "$TOML_VER" != "$VER" ]]; then
+              echo "::error::gradle/libs.versions.toml app=$TOML_VER but tag is $TAG"
+              exit 1
+            fi
+          fi
+          echo "tag=$TAG"       >> "$GITHUB_OUTPUT"
+          echo "version=$VER"   >> "$GITHUB_OUTPUT"
+          echo "toml=$TOML_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Install RPM tooling (deb+rpm leg only)
+        if: matrix.family == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      - name: Fetch appimagetool (linux-portable only, SHA-verified)
+        if: matrix.family == 'linux-portable'
+        run: |
+          set -euo pipefail
+          # appimagetool 1.9.0 validates the .desktop file via desktop-file-validate, and writes the
+          # AppImage's .zsync (delta updates) only when zsyncmake is installed.
+          sudo apt-get update && sudo apt-get install -y desktop-file-utils zsync
+          # Map runner arch → upstream AppImage suffix (x86_64 / aarch64).
+          case "${{ matrix.arch }}" in
+            x64)   TOOL_ARCH=x86_64 ; EXPECTED_SHA="$APPIMAGETOOL_SHA256_X86_64" ;;
+            arm64) TOOL_ARCH=aarch64; EXPECTED_SHA="$APPIMAGETOOL_SHA256_AARCH64" ;;
+            *)     echo "::error::unsupported arch for AppImage: ${{ matrix.arch }}"; exit 1 ;;
+          esac
+          URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${TOOL_ARCH}.AppImage"
+          DEST="desktopApp/packaging/appimage/appimagetool-${TOOL_ARCH}.AppImage"
+          curl -fsSL --retry 3 "$URL" -o "$DEST"
+          actual=$(sha256sum "$DEST" | awk '{print $1}')
+          if [[ "$actual" != "$EXPECTED_SHA" ]]; then
+            echo "::error::appimagetool SHA256 mismatch for $TOOL_ARCH. Expected $EXPECTED_SHA, got $actual"
+            exit 1
+          fi
+          chmod +x "$DEST"
+
+      # Flatpak tooling + the freedesktop runtime/sdk the manifest pins
+      # (runtime-version is greped from the manifest so this never drifts).
+      # Retried: the runtime download from Flathub is ~1 GB and flatpak
+      # install resumes cleanly on re-run.
+      - name: Install Flatpak tooling + runtimes (linux-portable only)
+        if: matrix.family == 'linux-portable'
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60  # v4.0.0
+        with:
+          max_attempts: 3
+          timeout_minutes: 15
+          command: |
+            set -euo pipefail
+            sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+            flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+            FDO_VER=$(grep -E "^runtime-version:" desktopApp/packaging/flatpak/com.vitorpamplona.amethyst.Amethyst.yml | cut -d"'" -f2)
+            flatpak install --user --noninteractive flathub \
+              "org.freedesktop.Platform//${FDO_VER}" \
+              "org.freedesktop.Sdk//${FDO_VER}"
+
+      # macOS only: import the Developer ID Application cert into a throwaway
+      # keychain so jpackage's codesign pass can find it. Soft — if the
+      # MAC_CERTIFICATE_P12 secret isn't set (forks, or before Apple creds are
+      # provisioned) the DMG is built UNSIGNED, exactly as before. notarytool
+      # runs as part of the gradle task when the identity env is exported below.
+      - name: Import Apple Developer ID certificate (macOS leg, if configured)
+        if: matrix.family == 'macos'
+        id: mac_keychain
+        uses: ./.github/actions/import-macos-cert
+        with:
+          certificate-p12-base64: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          certificate-password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+
+      - name: Build desktop artifacts
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60  # v4.0.0
+        env:
+          # Empty on non-macOS legs and on the macOS leg when no cert is
+          # configured — the gradle macOS{} block skips signing when the
+          # identity is blank. Prefer the full common name resolved from the
+          # keychain over the raw secret: Compose's signer maps the identity via
+          # `security find-certificate` and only matches the exact "Developer ID
+          # Application: …" CN, whereas the secret may be a hash or partial name
+          # (which bare codesign accepts but Compose does not). Fall back to the
+          # secret if resolution failed.
+          AMETHYST_MAC_SIGN_IDENTITY: ${{ steps.mac_keychain.outputs.signing == 'true' && (steps.mac_keychain.outputs.identity || secrets.MAC_SIGN_IDENTITY) || '' }}
+          # Explicit keychain for Compose's MacSigner. Its `security
+          # find-certificate` lookup doesn't resolve the imported cert via the
+          # search list on these runners ("Could not find certificate ... in
+          # keychain []"), so point it at the throwaway keychain directly.
+          AMETHYST_MAC_SIGN_KEYCHAIN: ${{ steps.mac_keychain.outputs.signing == 'true' && steps.mac_keychain.outputs.keychain || '' }}
+          AMETHYST_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          AMETHYST_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          AMETHYST_NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+        with:
+          max_attempts: 2
+          # macOS needs far longer: notarizeReleaseDmg blocks on `notarytool
+          # submit --wait`, which is minutes-to-tens-of-minutes on Apple's side.
+          timeout_minutes: ${{ matrix.family == 'macos' && 45 || 15 }}
+          # Append notarization on the macOS leg. `packageReleaseDmg` only SIGNS
+          # the DMG — notarization is a separate Compose task, and because it was
+          # never invoked every release up to v1.13.1 shipped a signed but
+          # UNNOTARIZED DMG that Gatekeeper blocks on first launch. The task runs
+          # `notarytool submit --wait` and then `stapler staple`, in place, so the
+          # asset-collection step below still finds the same file.
+          #
+          # Gated on the cert AND all three notary secrets being present, so forks
+          # and credential-less runs keep producing a plain unsigned DMG exactly as
+          # before instead of failing.
+          command: ./gradlew --no-daemon :desktopApp:${{ matrix.tasks }}${{ (matrix.family == 'macos' && steps.mac_keychain.outputs.signing == 'true' && secrets.MAC_NOTARY_APPLE_ID != '' && secrets.MAC_NOTARY_PASSWORD != '' && secrets.MAC_NOTARY_TEAM_ID != '') && ' :desktopApp:notarizeReleaseDmg' || '' }}
+
+      # Regression guard. The missing-notarization bug was invisible for many
+      # releases precisely because nothing ever asserted the outcome; assert it
+      # now so a silently-dropped notarization step can never ship again.
+      - name: Verify the DMG is notarized and stapled (macOS leg)
+        if: matrix.family == 'macos'
+        env:
+          EXPECT_NOTARIZED: ${{ (steps.mac_keychain.outputs.signing == 'true' && secrets.MAC_NOTARY_APPLE_ID != '' && secrets.MAC_NOTARY_PASSWORD != '' && secrets.MAC_NOTARY_TEAM_ID != '') && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          DMG=$(find desktopApp/build/compose/binaries -name "*.dmg" -print -quit)
+          [[ -n "$DMG" ]] || { echo "::error::no DMG produced"; exit 1; }
+          echo "Checking $DMG"
+
+          if [[ "$EXPECT_NOTARIZED" != "true" ]]; then
+            echo "::warning::Apple signing/notary credentials are not configured; this DMG is unsigned and unnotarized. Gatekeeper will block it, and it is not eligible for the Homebrew cask."
+            exit 0
+          fi
+
+          if ! xcrun stapler validate "$DMG"; then
+            echo "::error::$DMG has no stapled notarization ticket -- notarizeReleaseDmg did not run or failed"
+            exit 1
+          fi
+          echo "notarization ticket stapled OK"
+
+      # A Linux build packaged on a stock JDK still runs, but only through XWayland. Fail instead
+      # of shipping that: the bundled runtime must carry JBR's Wayland toolkit.
+      - name: Verify the bundled runtime draws on Wayland (Linux legs)
+        if: startsWith(matrix.family, 'linux')
+        run: |
+          set -euo pipefail
+          found=$(find desktopApp/build/compose/binaries/main-release -path '*/lib/runtime/lib/libawt_wlawt.so' -print -quit)
+          [[ -n "$found" ]] || { echo "::error::the bundled runtime has no Wayland toolkit (libawt_wlawt.so); build on the JetBrains Runtime"; exit 1; }
+          echo "Wayland toolkit bundled: $found"
+
+      # jpackage pins libicu and the t64-renamed libs (libasound2t64, ...) to the
+      # build host (ubuntu-24.04). Rewrite the .deb so it installs across Debian/Ubuntu.
+      - name: Relax build-host-pinned deps in .deb
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/relax-deb-libicu.sh
+          scripts/relax-deb-libicu.sh desktopApp/build/compose/binaries/main-release/deb/*.deb
+
+      # jpackage --type deb only auto-generates Depends from dpkg-shlibdeps
+      # against the bundled JRE under lib/runtime/, NOT the app payload under
+      # lib/app/. libskiko-linux-arm64.so has libEGL.so.1 in DT_NEEDED (unlike
+      # the x64 skiko which only links libGL.so.1), so a minimal aarch64
+      # install without EGL crashes at startup with:
+      #   UnsatisfiedLinkError: libEGL.so.1: cannot open shared object file
+      # Rewrite the arm64 .deb to add libegl1 to Depends. x64 .deb is untouched.
+      - name: Add libegl1 dep to arm64 .deb
+        if: matrix.family == 'linux' && matrix.arch == 'arm64'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/add-deb-libegl-dep.sh
+          scripts/add-deb-libegl-dep.sh desktopApp/build/compose/binaries/main-release/deb/*.deb
+
+      # The media player (kdroidFilter) drives the system GStreamer from a native library
+      # it unpacks at runtime, which jpackage's dependency scan never sees. Without the
+      # plugins every video fails with "Failed to create native player". The .rpm gets the
+      # same from desktopApp/build.gradle.kts.
+      - name: Add GStreamer deps to .deb
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/add-deb-gstreamer-deps.sh
+          scripts/add-deb-gstreamer-deps.sh desktopApp/build/compose/binaries/main-release/deb/*.deb
+
+      # The bundled JBR loads libxkbcommon (the keyboard on Wayland) with dlopen, which jpackage's
+      # dependency scan never sees. See scripts/add-deb-wayland-deps.sh.
+      - name: Add Wayland deps to .deb
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/add-deb-wayland-deps.sh
+          scripts/add-deb-wayland-deps.sh desktopApp/build/compose/binaries/main-release/deb/*.deb
+
+      # Ships the menu entry in /usr/share/applications with StartupWMClass (docks match the
+      # window's WM_CLASS to it) instead of registering it from postinst with xdg-desktop-menu,
+      # which fails on systems without menu directories. Also sets the .deb's compression (xz).
+      - name: Fix desktop entry in .deb
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/fix-deb-desktop-entry.sh
+          scripts/fix-deb-desktop-entry.sh desktopApp/build/compose/binaries/main-release/deb/*.deb
+
+      - name: Build portable archives (windows + linux-portable)
+        if: matrix.family == 'windows' || matrix.family == 'linux-portable'
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          ARCH="${{ matrix.arch }}"
+          APP="desktopApp/build/compose/binaries/main-release/app"
+          mkdir -p desktopApp/build/portable
+          if [[ "${{ matrix.family }}" == "windows" ]]; then
+            ( cd "$APP" && 7z a -tzip "../../../../portable/amethyst-desktop-${VER}-windows-${ARCH}.zip" Amethyst/ )
+          else
+            ( cd "$APP" && tar czf "../../../../portable/amethyst-desktop-${VER}-linux-${ARCH}.tar.gz" Amethyst/ )
+          fi
+
+      # Flatpak bundle: wraps the same createReleaseDistributable tree the
+      # AppImage uses. The manifest (desktopApp/packaging/flatpak/) copies the
+      # prebuilt jpackage tree into /app — no Gradle runs inside the sandbox.
+      # build-bundle emits a single-file .flatpak whose baked-in runtime-repo
+      # lets the user's flatpak fetch the freedesktop runtime from Flathub on
+      # install. --disable-rofiles-fuse: GH runners lack a usable rofiles-fuse.
+      - name: Build Flatpak bundle (linux-portable only)
+        if: matrix.family == 'linux-portable'
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          PKG="desktopApp/packaging/flatpak"
+          APP_ID="com.vitorpamplona.amethyst.Amethyst"
+          OUT="desktopApp/build/flatpak"
+          # AppImage-style arch names for the bundle filename.
+          case "${{ matrix.arch }}" in
+            x64)   BUNDLE_ARCH=x86_64  ;;
+            arm64) BUNDLE_ARCH=aarch64 ;;
+            *)     echo "::error::unsupported arch for Flatpak: ${{ matrix.arch }}"; exit 1 ;;
+          esac
+          # The checked-in metainfo carries the release history (Flathub reads
+          # it from the source tree). A tag missing from it gets a bare entry in
+          # this bundle only, plus a warning to fix the source tree. Dry runs
+          # (0.0.0-dryrun) inject nothing, so the history stays in order.
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]] && \
+             ! grep -q "<release version=\"${VER}\"" "${PKG}/${APP_ID}.metainfo.xml"; then
+            echo "::warning file=${PKG}/${APP_ID}.metainfo.xml::no <release version=\"${VER}\"> entry; add it to the source tree (RELEASE_OPS.md pre-tag checklist)"
+            sed -i "s|<releases>|<releases>\n    <release version=\"${VER}\" date=\"$(date -u +%F)\" />|" \
+              "${PKG}/${APP_ID}.metainfo.xml"
+          fi
+          mkdir -p "$OUT"
+          flatpak-builder --user --force-clean --disable-rofiles-fuse \
+            --state-dir="${OUT}/.flatpak-builder" \
+            --repo="${OUT}/repo" \
+            "${OUT}/build-dir" \
+            "${PKG}/${APP_ID}.yml"
+          flatpak build-bundle "${OUT}/repo" \
+            "${OUT}/Amethyst-${VER}-${BUNDLE_ARCH}.flatpak" \
+            "$APP_ID" \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+          ls -la "$OUT"
+
+      # Every packaged build proves the OS keyring works in what ships, not only in development:
+      # ProGuard stripping a class, a jar signature it broke, a sandbox permission the Flatpak lacks
+      # all showed up only here. See commons/plans/2026-10-12-desktop-key-storage.md.
+      - name: Install a keyring session (Linux legs)
+        if: startsWith(matrix.family, 'linux')
+        run: sudo apt-get update && sudo apt-get install -y gnome-keyring dbus
+
+      - name: Keyring self-test (packaged app)
+        run: |
+          set -euo pipefail
+          APP=desktopApp/build/compose/binaries/main-release/app
+          case "${{ matrix.family }}" in
+            macos)   BIN="$APP/Amethyst.app/Contents/MacOS/Amethyst" ;;
+            windows) BIN="$APP/Amethyst/Amethyst.exe" ;;
+            *)       BIN="$APP/Amethyst/bin/Amethyst" ;;
+          esac
+          [[ -f "$BIN" ]] || { echo "::error::no packaged app at $BIN"; find "$APP" -maxdepth 3 | head -40; exit 1; }
+          bash scripts/keyring-self-test.sh "$BIN"
+
+      - name: Keyring self-test (Flatpak bundle, linux-portable only)
+        if: matrix.family == 'linux-portable'
+        run: |
+          set -euo pipefail
+          flatpak install --user -y --noninteractive desktopApp/build/flatpak/*.flatpak
+          bash scripts/keyring-self-test.sh flatpak run com.vitorpamplona.amethyst.Amethyst
+
+      - name: Collect + rename assets
+        run: |
+          set -euo pipefail
+          # shellcheck source=scripts/asset-name.sh
+          source scripts/asset-name.sh
+          # collect_assets normalizes linux-portable → linux internally.
+          collect_assets "${{ matrix.family }}" "${{ matrix.arch }}" "${{ steps.ver.outputs.version }}" dist
+
+      - name: Enforce asset size budget (1 GB per asset)
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in dist/*; do
+            if [[ -f "$f" ]]; then
+              size=$(wc -c < "$f")
+              mb=$(( size / 1048576 ))
+              if (( size > 1073741824 )); then
+                echo "::error file=$f::asset is ${mb} MB — exceeds 1 GB budget"
+                fail=1
+              else
+                echo "OK: $f — ${mb} MB"
+              fi
+            fi
+          done
+          [[ "$fail" == 0 ]]
+
+      - name: Classify release
+        id: classify
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          # Stable = exactly vMAJOR.MINOR.PATCH; everything else is prerelease.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to GH Release (skip on dry-run)
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
+        with:
+          files: dist/*
+          tag_name: ${{ steps.ver.outputs.tag }}
+          prerelease: ${{ steps.classify.outputs.prerelease }}
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: false  # Android job writes release notes (last-writer-wins race)
+
+      - name: Dry-run summary
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        run: |
+          echo "### Dry-run: ${{ matrix.family }}/${{ matrix.arch }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -la dist >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Amy CLI build matrix. Each leg produces a self-contained amy bundle with a
+  # minimal jlink'd JRE — no system Java required on the user's machine.
+  #
+  # amyImage task (all legs):  cli/build/amy-image/amy/ → amy-*.tar.gz
+  # jpackageDeb / jpackageRpm: cli/build/jpackage/amy_*.deb + amy-*.rpm
+  #
+  # macOS legs ship only the tarball. We deliberately avoid jpackage --type
+  # app-image on macOS because it produces an .app bundle (burying the binary
+  # at Contents/MacOS/amy) — wrong UX for a CLI.
+  #
+  # Windows is intentionally deferred — cli/ has not been validated on Windows
+  # yet (data-dir path handling, file locking on groups/<gid>.mls, line endings
+  # in identity.json).
+  #
+  # Asset naming: amy-<version>-<family>-<arch>.<ext>. See scripts/asset-name.sh.
+  # ---------------------------------------------------------------------------
+  build-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15,         arch: arm64, family: macos,   tasks: "amyImage" }
+          - { os: ubuntu-latest,    arch: x64,   family: linux,   tasks: "amyImage jpackageDeb jpackageRpm" }
+          - { os: ubuntu-24.04-arm, arch: arm64, family: linux,   tasks: "amyImage jpackageDeb jpackageRpm" }
+          # Windows legs: only amyImage. .deb/.rpm are Linux-only jpackage types
+          # and jpackageMsi for a CLI is deferred (the portable zip is the
+          # documented Windows install path). The launcher script writes both
+          # `bin/amy` (sh) and `bin/amy.bat`, and the assertion below runs
+          # under bash on GH windows runners (git-bash is on PATH). collect_cli_assets
+          # zips the image on Windows instead of tar.gz.
+          - { os: windows-latest,   arch: x64,   family: windows, tasks: "amyImage" }
+          - { os: windows-11-arm,   arch: arm64, family: windows, tasks: "amyImage" }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45  # macOS leg also codesigns + notarizes the jlink image
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Resolve tag + version
+        id: ver
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          TEST_TAG: ${{ github.event.inputs.test_tag || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${TEST_TAG:-v0.0.0-dryrun}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VER="${TAG#v}"
+          TOML_VER=$(grep -E '^app\s*=' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          # On dry-run we only require that TOML has a version; on real tag push we require exact match.
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            if [[ "$TOML_VER" != "$VER" ]]; then
+              echo "::error::gradle/libs.versions.toml app=$TOML_VER but tag is $TAG"
+              exit 1
+            fi
+          fi
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Install RPM tooling (linux only)
+        if: matrix.family == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      - name: Build amy artifacts
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60  # v4.0.0
+        with:
+          max_attempts: 2
+          timeout_minutes: 15
+          command: ./gradlew --no-daemon :cli:${{ matrix.tasks }}
+
+      # amy is headless: the Compose UI render stack (skiko + its native dylibs,
+      # foundation/material/material3/ui/animation) must never reach the CLI
+      # image. cli/build.gradle.kts excludes it from runtimeClasspath; this
+      # guards against a transitive dep silently dragging it back (size + macOS
+      # notarization-surface regression). compose.runtime is CLI-safe and stays.
+      - name: Assert no Compose UI in the amy image
+        run: |
+          set -euo pipefail
+          LIB="cli/build/install/amy/lib"
+          leak="$(ls "$LIB" | grep -iE 'skiko|foundation(-layout)?-desktop|material3?-desktop|material-ripple|ui-desktop|animation(-core)?-desktop' || true)"
+          if [ -n "$leak" ]; then
+            echo "::error::Compose UI render stack leaked into the amy CLI image:"
+            echo "$leak" | sed 's/^/  /'
+            echo "Exclude it in cli/build.gradle.kts (configurations.runtimeClasspath)."
+            exit 1
+          fi
+          echo "OK: no skiko / Compose UI render jars in the amy image ($(du -sh "$LIB" | cut -f1))."
+
+      # macOS only: import the Developer ID cert (no-op without the secret) so
+      # the next step can codesign the jlink image. The jvm bundle for
+      # Homebrew-core is NOT signed here — Homebrew strips quarantine itself.
+      - name: Import Apple Developer ID certificate (macOS leg, if configured)
+        if: matrix.family == 'macos'
+        id: mac_keychain
+        uses: ./.github/actions/import-macos-cert
+        with:
+          certificate-p12-base64: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          certificate-password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+
+      # Codesign + notarize the macOS jlink image (amy-<ver>-macos-arm64.tar.gz)
+      # for users who download it directly. A loose tarball can't be stapled
+      # (stapler only does .app/.dmg/.pkg), so Gatekeeper verifies notarization
+      # online on first run. Runs before "Collect" so the tarred image is signed.
+      - name: Sign + notarize amy image (macOS leg, if configured)
+        if: matrix.family == 'macos' && steps.mac_keychain.outputs.signing == 'true'
+        env:
+          SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          IMG="cli/build/amy-image/amy"
+          ENTITLEMENTS="cli/packaging/macos/amy.entitlements"
+          # First sign the macOS Mach-O natives buried INSIDE the bundled jars
+          # (secp256k1/jna/sqlite/skiko/jkeychain/mediaplayer). The loose-file
+          # loop below can't see them, but Apple's notary recurses into jars and
+          # rejects any unsigned Mach-O — so this must run before notarize.
+          SIGN_IDENTITY="$SIGN_IDENTITY" scripts/sign-macos-jar-natives.sh "$IMG"
+          # Sign every loose Mach-O binary in the bundled JRE. Each is signed
+          # independently (no enclosing .app seals them), so order is irrelevant.
+          # Executables get the hardened-runtime entitlements; dylibs don't.
+          while IFS= read -r f; do
+            case "$(file -b "$f")" in
+              *Mach-O*executable*)
+                codesign --force --options runtime --timestamp \
+                  --entitlements "$ENTITLEMENTS" --sign "$SIGN_IDENTITY" "$f" ;;
+              *Mach-O*)
+                codesign --force --options runtime --timestamp \
+                  --sign "$SIGN_IDENTITY" "$f" ;;
+            esac
+          done < <(find "$IMG" -type f)
+          codesign --verify --strict --verbose=2 "$IMG/runtime/bin/java"
+          # Notarize: zip the signed image, submit, wait for Apple's verdict.
+          # The notary service recursively inspects the lib/*.jar files; their
+          # embedded Mach-O natives are signed by sign-macos-jar-natives.sh
+          # above. Surface the per-file log on any non-Accepted verdict so a
+          # regression is diagnostic rather than a bare failure.
+          ZIP="$RUNNER_TEMP/amy-notarize.zip"
+          OUT="$RUNNER_TEMP/notary-submit.json"
+          ditto -c -k --keepParent "$IMG" "$ZIP"
+          if ! xcrun notarytool submit "$ZIP" \
+                --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" \
+                --team-id "$NOTARY_TEAM_ID" --wait --output-format json > "$OUT"; then
+            echo "::warning::notarytool submit exited non-zero"
+          fi
+          cat "$OUT"
+          STATUS="$(jq -r '.status // "Unknown"' "$OUT" 2>/dev/null || echo Unknown)"
+          SUBMISSION_ID="$(jq -r '.id // empty' "$OUT" 2>/dev/null || true)"
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization status: $STATUS"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "----- notary log -----"
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" \
+                --team-id "$NOTARY_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+      # jpackage pins libicu and the t64-renamed libs (libasound2t64, ...) to the
+      # build host (ubuntu-24.04). Rewrite the .deb so it installs across Debian/Ubuntu.
+      - name: Relax build-host-pinned deps in .deb
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/relax-deb-libicu.sh
+          scripts/relax-deb-libicu.sh cli/build/jpackage/*.deb
+
+      - name: Collect + rename assets
+        run: |
+          set -euo pipefail
+          # shellcheck source=scripts/asset-name.sh
+          source scripts/asset-name.sh
+          collect_cli_assets "${{ matrix.family }}" "${{ matrix.arch }}" "${{ steps.ver.outputs.version }}" dist
+
+      # Homebrew-core ships a no-JRE jar bundle and depends_on "openjdk" — it
+      # cannot use the jlink tarball above (bundled runtime) nor build from
+      # source (its sandbox blocks Gradle's Maven downloads). installDist
+      # (bin/amy + lib/*.jar, no runtime/) is exactly that bundle. It is pure
+      # JVM bytecode, so one platform-independent asset serves every OS; we cut
+      # it on the linux leg only. amyImage depends on installDist, so the
+      # cli/build/install/amy tree already exists here.
+      - name: Package no-JRE jvm bundle for Homebrew (linux leg only)
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          SRC="cli/build/install/amy"
+          test -x "$SRC/bin/amy"
+          ( cd "$SRC" && tar czf "$OLDPWD/dist/amy-${VER}-jvm.tar.gz" bin lib )
+          echo "Collected: dist/amy-${VER}-jvm.tar.gz"
+
+      - name: Enforce CLI size budget (120 MB per asset)
+        run: |
+          set -euo pipefail
+          # Measured after the :commons / :commonsUI split (1.15.2, Linux x64):
+          # amy-*-jvm.tar.gz 55 MB, amy-*.tar.gz (jlink image) 80 MB, lib/ 60 MB
+          # on disk. The budget sits 50% above the largest asset so a Compose /
+          # Skiko / Android leak (+25-40 MB compressed) trips it, while the
+          # per-OS JRE variance of the jlink image does not. The "Assert no
+          # Compose UI" step above is the precise check; this is the coarse one.
+          fail=0
+          for f in dist/*; do
+            if [[ -f "$f" ]]; then
+              size=$(wc -c < "$f")
+              mb=$(( size / 1048576 ))
+              if (( size > 125829120 )); then
+                echo "::error file=$f::asset is ${mb} MB — exceeds 120 MB amy budget"
+                fail=1
+              else
+                echo "OK: $f — ${mb} MB"
+              fi
+            fi
+          done
+          [[ "$fail" == 0 ]]
+
+      - name: Classify release
+        id: classify
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to GH Release (skip on dry-run)
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
+        with:
+          files: dist/*
+          tag_name: ${{ steps.ver.outputs.tag }}
+          prerelease: ${{ steps.classify.outputs.prerelease }}
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: false  # Android job writes release notes (last-writer-wins race)
+
+      - name: Dry-run summary
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        run: |
+          echo "### Dry-run: amy ${{ matrix.family }}/${{ matrix.arch }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -la dist >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # geode relay build matrix. Same shape as build-cli — geode is the same kind
+  # of `application`-plugin JVM module — producing a self-contained bundle with a
+  # minimal jlink'd JRE (no system Java required) plus native Linux packages.
+  #
+  # geodeImage task (all legs):  geode/build/geode-image/geode/ → geode-*.tar.gz
+  # jpackageDeb / jpackageRpm:   geode/build/jpackage/geode_*.deb + geode-*.rpm
+  # no-JRE jvm bundle (linux):   geode-<ver>-jvm.tar.gz for the Homebrew formula
+  #
+  # Unlike build-cli there is no "no Compose UI" assertion — geode depends only on
+  # quartz and never pulls the Compose render stack. The GHCR Docker image is a
+  # separate job (docker-geode) below.
+  #
+  # Asset naming: geode-<version>-<family>-<arch>.<ext>. See scripts/asset-name.sh.
+  # ---------------------------------------------------------------------------
+  build-geode:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15,         arch: arm64, family: macos,   tasks: "geodeImage" }
+          - { os: ubuntu-latest,    arch: x64,   family: linux,   tasks: "geodeImage jpackageDeb jpackageRpm" }
+          - { os: ubuntu-24.04-arm, arch: arm64, family: linux,   tasks: "geodeImage jpackageDeb jpackageRpm" }
+          # Windows legs: geodeImage only. The .deb/.rpm are Linux-only; MSI is
+          # deferred (portable zip covers the primary use — operators still
+          # deploy geode via the Docker image or the tarball on Linux). The
+          # image writes both `bin/geode` (sh) and `bin/geode.bat`, and the
+          # smoke test below runs under bash on the windows runner.
+          - { os: windows-latest,   arch: x64,   family: windows, tasks: "geodeImage" }
+          - { os: windows-11-arm,   arch: arm64, family: windows, tasks: "geodeImage" }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45  # macOS leg also codesigns + notarizes the jlink image
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Resolve tag + version
+        id: ver
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          TEST_TAG: ${{ github.event.inputs.test_tag || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${TEST_TAG:-v0.0.0-dryrun}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VER="${TAG#v}"
+          TOML_VER=$(grep -E '^app\s*=' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            if [[ "$TOML_VER" != "$VER" ]]; then
+              echo "::error::gradle/libs.versions.toml app=$TOML_VER but tag is $TAG"
+              exit 1
+            fi
+          fi
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Install RPM tooling (linux only)
+        if: matrix.family == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      - name: Build geode artifacts
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60  # v4.0.0
+        with:
+          max_attempts: 2
+          timeout_minutes: 15
+          command: ./gradlew --no-daemon :geode:${{ matrix.tasks }}
+
+      # Boot the bundled jlink image before shipping it. `--version` proves the
+      # JVM starts and the main class loads; the serve leg proves the jlink
+      # module list is complete for the real relay path (Ktor CIO + SQLite +
+      # NIP-11 serialization) — a too-tight module list links fine but fails
+      # here with NoClassDefFound instead of on an operator's machine.
+      #
+      # On the Windows legs we invoke bin/geode.bat instead of bin/geode. The
+      # tmp path also differs between git-bash on Windows (which resolves /tmp
+      # to a mingw path that curl -o accepts) and POSIX runners; kept identical
+      # because the workflow's `defaults.run.shell: bash` uses git-bash on
+      # Windows and /tmp is a valid mingw path there.
+      - name: Smoke-test the geode image
+        run: |
+          set -euo pipefail
+          IMG="geode/build/geode-image/geode"
+          if [[ "${{ matrix.family }}" == "windows" ]]; then
+            LAUNCHER="$IMG/bin/geode.bat"
+          else
+            LAUNCHER="$IMG/bin/geode"
+          fi
+          "$LAUNCHER" --version
+          "$LAUNCHER" --port 17447 &
+          PID=$!
+          ok=0
+          for i in $(seq 1 20); do
+            if curl -fsS -H 'Accept: application/nostr+json' http://127.0.0.1:17447/ -o /tmp/nip11.json; then ok=1; break; fi
+            sleep 1
+          done
+          kill "$PID" 2>/dev/null || true
+          wait "$PID" 2>/dev/null || true
+          [[ "$ok" == 1 ]] || { echo "::error::geode image did not serve NIP-11 within 20s"; exit 1; }
+          echo "NIP-11 doc:"; head -c 400 /tmp/nip11.json; echo
+          grep -q '"supported_nips"' /tmp/nip11.json || { echo "::error::NIP-11 doc missing supported_nips"; exit 1; }
+
+      # macOS only: import the Developer ID cert (no-op without the secret) so
+      # the next step can codesign the jlink image. The jvm bundle for
+      # Homebrew-core is NOT signed here — Homebrew strips quarantine itself.
+      - name: Import Apple Developer ID certificate (macOS leg, if configured)
+        if: matrix.family == 'macos'
+        id: mac_keychain
+        uses: ./.github/actions/import-macos-cert
+        with:
+          certificate-p12-base64: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          certificate-password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+
+      # Codesign + notarize the macOS jlink image (geode-<ver>-macos-arm64.tar.gz)
+      # for operators who download it directly. A loose tarball can't be stapled
+      # (stapler only does .app/.dmg/.pkg), so Gatekeeper verifies notarization
+      # online on first run. Runs before "Collect" so the tarred image is signed.
+      - name: Sign + notarize geode image (macOS leg, if configured)
+        if: matrix.family == 'macos' && steps.mac_keychain.outputs.signing == 'true'
+        env:
+          SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          IMG="geode/build/geode-image/geode"
+          ENTITLEMENTS="geode/packaging/macos/geode.entitlements"
+          # Sign the macOS Mach-O natives buried INSIDE the bundled jars
+          # (secp256k1/sqlite) first — Apple's notary recurses into jars and
+          # rejects any unsigned Mach-O, so this must run before notarize.
+          SIGN_IDENTITY="$SIGN_IDENTITY" scripts/sign-macos-jar-natives.sh "$IMG"
+          # Sign every loose Mach-O binary in the bundled JRE. Executables get
+          # the hardened-runtime entitlements; dylibs don't.
+          while IFS= read -r f; do
+            case "$(file -b "$f")" in
+              *Mach-O*executable*)
+                codesign --force --options runtime --timestamp \
+                  --entitlements "$ENTITLEMENTS" --sign "$SIGN_IDENTITY" "$f" ;;
+              *Mach-O*)
+                codesign --force --options runtime --timestamp \
+                  --sign "$SIGN_IDENTITY" "$f" ;;
+            esac
+          done < <(find "$IMG" -type f)
+          codesign --verify --strict --verbose=2 "$IMG/runtime/bin/java"
+          # Notarize: zip the signed image, submit, wait for Apple's verdict.
+          ZIP="$RUNNER_TEMP/geode-notarize.zip"
+          OUT="$RUNNER_TEMP/notary-submit.json"
+          ditto -c -k --keepParent "$IMG" "$ZIP"
+          if ! xcrun notarytool submit "$ZIP" \
+                --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" \
+                --team-id "$NOTARY_TEAM_ID" --wait --output-format json > "$OUT"; then
+            echo "::warning::notarytool submit exited non-zero"
+          fi
+          cat "$OUT"
+          STATUS="$(jq -r '.status // "Unknown"' "$OUT" 2>/dev/null || echo Unknown)"
+          SUBMISSION_ID="$(jq -r '.id // empty' "$OUT" 2>/dev/null || true)"
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization status: $STATUS"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "----- notary log -----"
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" \
+                --team-id "$NOTARY_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+      # jpackage pins libicu and the t64-renamed libs (libasound2t64, ...) to the
+      # build host (ubuntu-24.04). Rewrite the .deb so it installs across Debian/Ubuntu.
+      - name: Relax build-host-pinned deps in .deb
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/relax-deb-libicu.sh
+          scripts/relax-deb-libicu.sh geode/build/jpackage/*.deb
+
+      - name: Collect + rename assets
+        run: |
+          set -euo pipefail
+          # shellcheck source=scripts/asset-name.sh
+          source scripts/asset-name.sh
+          collect_geode_assets "${{ matrix.family }}" "${{ matrix.arch }}" "${{ steps.ver.outputs.version }}" dist
+
+      # Homebrew-core ships a no-JRE jar bundle and depends_on "openjdk" — it
+      # cannot use the jlink tarball above (bundled runtime) nor build from
+      # source (its sandbox blocks Gradle's Maven downloads). installDist
+      # (bin/geode + lib/*.jar, no runtime/) is exactly that bundle. It is pure
+      # JVM bytecode, so one platform-independent asset serves every OS; we cut
+      # it on the linux leg only. geodeImage depends on installDist, so the
+      # geode/build/install/geode tree already exists here.
+      - name: Package no-JRE jvm bundle for Homebrew (linux leg only)
+        if: matrix.family == 'linux'
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.version }}"
+          SRC="geode/build/install/geode"
+          test -x "$SRC/bin/geode"
+          ( cd "$SRC" && tar czf "$OLDPWD/dist/geode-${VER}-jvm.tar.gz" bin lib )
+          echo "Collected: dist/geode-${VER}-jvm.tar.gz"
+
+      - name: Enforce geode size budget (200 MB per asset)
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in dist/*; do
+            if [[ -f "$f" ]]; then
+              size=$(wc -c < "$f")
+              mb=$(( size / 1048576 ))
+              if (( size > 209715200 )); then
+                echo "::error file=$f::asset is ${mb} MB — exceeds 200 MB geode budget"
+                fail=1
+              else
+                echo "OK: $f — ${mb} MB"
+              fi
+            fi
+          done
+          [[ "$fail" == 0 ]]
+
+      - name: Classify release
+        id: classify
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to GH Release (skip on dry-run)
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
+        with:
+          files: dist/*
+          tag_name: ${{ steps.ver.outputs.tag }}
+          prerelease: ${{ steps.classify.outputs.prerelease }}
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: false  # Android job writes release notes (last-writer-wins race)
+
+      - name: Dry-run summary
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        run: |
+          echo "### Dry-run: geode ${{ matrix.family }}/${{ matrix.arch }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -la dist >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # geode Docker image → GitHub Container Registry (GHCR). A relay is most often
+  # deployed as a container, so this is geode's primary distribution channel.
+  # Builds geode/Dockerfile (multi-stage: gradle installDist → temurin JRE) and
+  # pushes ghcr.io/<owner>/geode:<version> (+ :latest on a stable release).
+  # Tag-push only — skipped on the workflow_dispatch dry-run.
+  # ---------------------------------------------------------------------------
+  docker-geode:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Resolve version + tags
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          # Lowercase owner — GHCR repository paths must be lowercase.
+          OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER}/geode"
+          TAGS="${IMAGE}:${VER}"
+          # Only move :latest for a stable vX.Y.Z tag, never a prerelease.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            TAGS="${TAGS},${IMAGE}:latest"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: geode/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Android build + sign + direct-upload. Logic preserved from previous workflow;
+  # uses softprops/action-gh-release@v2 instead of deprecated upload-release-asset.
+  # ---------------------------------------------------------------------------
+  deploy-android:
+    if: github.event_name != 'workflow_dispatch'  # dry-run skips Android (tag-push only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Cache gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-android-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-android-gradle-
+
+      - name: Build AAB
+        run: ./gradlew clean bundleRelease --stacktrace
+
+      - name: Sign AAB (Google Play)
+        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407  # v1
+        with:
+          releaseDirectory: amethyst/build/outputs/bundle/playRelease
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "36.0.0"
+
+      - name: Sign AAB (F-Droid)
+        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407  # v1
+        with:
+          releaseDirectory: amethyst/build/outputs/bundle/fdroidRelease
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "36.0.0"
+
+      - name: Build APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Sign APK (Google Play)
+        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407  # v1
+        with:
+          releaseDirectory: amethyst/build/outputs/apk/play/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "36.0.0"
+
+      - name: Sign APK (F-Droid)
+        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407  # v1
+        with:
+          releaseDirectory: amethyst/build/outputs/apk/fdroid/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "36.0.0"
+
+      # R8 cannot see reflection, so a keep rule that silently stops matching — a
+      # class moved to another package, a rule deleted, a DTO renamed — produces
+      # a green build and an APK that fails on a user's device. This asserts the
+      # reflective surface (JNI symbols, Jackson DTO field names, enum constants
+      # persisted in DataStore, WorkManager worker class names, the Cast
+      # OptionsProvider named in a manifest meta-data value) actually survived,
+      # against what R8 emitted for BOTH flavors. Runs before the assets are
+      # collected so a break fails the release rather than shipping.
+      - name: Verify R8 reflection contract
+        run: |
+          set -euo pipefail
+          for variant in playRelease fdroidRelease; do
+            echo "== $variant"
+            python3 tools/r8-verify/verify_reflection_contract.py \
+              "amethyst/build/outputs/mapping/${variant}/"
+          done
+
+      - name: Collect Android assets (rename to canonical scheme)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          TAG="${GITHUB_REF_NAME}"
+
+          # Play APKs (5 variants)
+          for variant in universal x86 x86_64 arm64-v8a armeabi-v7a; do
+            cp "amethyst/build/outputs/apk/play/release/amethyst-play-${variant}-release-unsigned-signed.apk" \
+               "dist/amethyst-googleplay-${variant}-${TAG}.apk"
+          done
+
+          # F-Droid APKs (5 variants)
+          for variant in universal x86 x86_64 arm64-v8a armeabi-v7a; do
+            cp "amethyst/build/outputs/apk/fdroid/release/amethyst-fdroid-${variant}-release-unsigned-signed.apk" \
+               "dist/amethyst-fdroid-${variant}-${TAG}.apk"
+          done
+
+          # AABs
+          cp "amethyst/build/outputs/bundle/playRelease/amethyst-play-release.aab" \
+             "dist/amethyst-googleplay-${TAG}.aab"
+          cp "amethyst/build/outputs/bundle/fdroidRelease/amethyst-fdroid-release.aab" \
+             "dist/amethyst-fdroid-${TAG}.aab"
+
+          # R8 mapping files — the ONLY way a crash report from this build is
+          # ever readable again. The release build is minified, so every class
+          # in every artifact above reports `r8-map-id-<hash>` as its source
+          # file and a renamed class/method; `scripts/retrace.sh <mapping>`
+          # turns that back into real names, files and lines (and expands the
+          # frames R8 inlined).
+          #
+          # Play Console deobfuscates by itself because AGP embeds the mapping
+          # in the .aab it was given. Nothing else does: a trace from an
+          # F-Droid, Zapstore, Accrescent or GitHub-APK user is unreadable
+          # without the matching file, and the mapping only exists on this
+          # runner. If it is not published here it is gone when the job ends.
+          #
+          # Gzipped because the raw text mapping is ~500 MB (~29 MB
+          # compressed). retrace.sh reads the .gz directly.
+          for flavor in play fdroid; do
+            case "$flavor" in
+              play)   name=googleplay ;;
+              fdroid) name=fdroid ;;
+            esac
+            src="amethyst/build/outputs/mapping/${flavor}Release/mapping.txt"
+            if [ ! -f "$src" ]; then
+              echo "::error::$src is missing — the release would ship with no way to read its crash reports."
+              exit 1
+            fi
+            gzip -c "$src" > "dist/amethyst-${name}-mapping-${TAG}.txt.gz"
+          done
+          ls -la dist
+
+      # Accrescent does not accept AABs or monolithic APKs — it requires a signed
+      # APK set (.apks) of split APKs generated by bundletool from the AAB. We build
+      # it from the F-Droid flavor (no proprietary Google deps) and sign the splits
+      # with the same release keystore used above. Upload is still manual: drop this
+      # .apks into https://console.accrescent.app (no publish API/CLI exists yet).
+      - name: Build Accrescent APK set (F-Droid)
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          BUNDLETOOL_VERSION="1.18.3"  # must be >= 1.11.4 per Accrescent requirements
+          curl -fsSL -o bundletool.jar \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+
+          # Same base64 keystore secret consumed by the r0adkll signing steps above.
+          echo "$SIGNING_KEY" | base64 -d > release.keystore
+
+          # --mode=default emits the split-APK set Accrescent wants (NOT --mode=universal,
+          # which produces a monolithic APK that Accrescent rejects).
+          java -jar bundletool.jar build-apks \
+            --bundle="dist/amethyst-fdroid-${TAG}.aab" \
+            --output="dist/amethyst-fdroid-${TAG}.apks" \
+            --ks=release.keystore \
+            --ks-key-alias="$KEY_ALIAS" \
+            --ks-pass="pass:$KEY_STORE_PASSWORD" \
+            --key-pass="pass:$KEY_PASSWORD" \
+            --mode=default
+
+          rm -f release.keystore bundletool.jar
+
+          # Accrescent's automated check rejects an APK set larger than 128 MiB.
+          SIZE_BYTES=$(stat -c%s "dist/amethyst-fdroid-${TAG}.apks")
+          echo "Accrescent APK set size: $((SIZE_BYTES / 1024 / 1024)) MiB"
+          if [ "$SIZE_BYTES" -gt $((128 * 1024 * 1024)) ]; then
+            echo "::warning::amethyst-fdroid-${TAG}.apks exceeds Accrescent's 128 MiB limit; the console will reject this upload."
+          fi
+          ls -la dist
+
+      - name: Classify release
+        id: classify
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Stable = exactly vMAJOR.MINOR.PATCH; everything else is prerelease.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Android assets to GH Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
+        with:
+          files: dist/*
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ steps.classify.outputs.prerelease }}
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true

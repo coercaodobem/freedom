@@ -1,0 +1,153 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.cli.commands
+
+import com.vitorpamplona.amethyst.cli.Args
+import com.vitorpamplona.amethyst.cli.DataDir
+import com.vitorpamplona.amethyst.cli.Identity
+import com.vitorpamplona.amethyst.cli.Output
+import com.vitorpamplona.amethyst.commons.defaults.DefaultNIP65RelaySet
+import com.vitorpamplona.amethyst.commons.domain.nip46.NostrConnectLoginUseCase
+import com.vitorpamplona.quartz.nip01Core.core.toHexKey
+import com.vitorpamplona.quartz.nip01Core.crypto.KeyPair
+import com.vitorpamplona.quartz.nip01Core.relay.client.NostrClient
+import com.vitorpamplona.quartz.nip01Core.relay.normalizer.NormalizedRelayUrl
+import com.vitorpamplona.quartz.nip01Core.relay.sockets.okhttp.BasicOkHttpWebSocket
+import com.vitorpamplona.quartz.nip01Core.relay.sockets.okhttp.TcpNoDelaySocketFactory
+import com.vitorpamplona.quartz.nip01Core.signers.SignerExceptions
+import com.vitorpamplona.quartz.nip46RemoteSigner.BunkerClientMetadata
+import com.vitorpamplona.quartz.nip46RemoteSigner.NostrConnectURI
+import okhttp3.OkHttpClient
+import kotlin.coroutines.cancellation.CancellationException
+
+/**
+ * NIP-46 NostrConnect (client-initiated) flow helpers.
+ *
+ * Parsing/encoding the `nostrconnect://` offer is shared between the client
+ * (`amy login --nostrconnect`, [login]) and the signer (`amy bunker connect`,
+ * which only parses). The signer side lives in [BunkerCommand].
+ */
+object NostrConnect {
+    data class Offer(
+        val clientPubkey: String,
+        val relays: Set<NormalizedRelayUrl>,
+        val secret: String,
+        val name: String?,
+        /** The client's self-declared permission request (`perms=sign_event:1,nip44_encrypt,…`), if any. */
+        val perms: String? = null,
+    )
+
+    /** Parse `nostrconnect://<client-pubkey>?relay=…&secret=…&perms=…&name=…` (percent-decoded). */
+    fun parseOffer(uri: String): Offer? {
+        val parsed = NostrConnectURI.parseNostrConnect(uri) ?: return null
+        return Offer(parsed.clientPubKey, parsed.relays, parsed.secret, parsed.name, parsed.perms)
+    }
+
+    /**
+     * `amy login --nostrconnect [--relay URL[,URL…]] [--name N] [--timeout SECS]`
+     *
+     * Mint a local transport keypair, print a `nostrconnect://` offer for the
+     * user to paste into a signer, then wait for the signer that answers with
+     * the offer's secret and ask it (`get_public_key`) which account it signs
+     * for. Persist a bunker account for THAT key: the answering key is the
+     * signer's transport key, which for most signers is not the user's.
+     */
+    suspend fun login(
+        dataDir: DataDir,
+        args: Args,
+    ): Int {
+        if (dataDir.identityExists()) {
+            return Output.error("exists", "identity already exists at ${dataDir.identityFile}; use a fresh --data-dir or delete it first")
+        }
+        val relays = RawEventSupport.relayFlag(args).ifEmpty { DefaultNIP65RelaySet }
+        if (relays.isEmpty()) return Output.error("bad_args", "no relays; pass --relay URL[,URL…]")
+        val timeoutMs = args.timeoutMs(120)
+        val name = args.flag("name")
+        // Optional NIP-46 permission request (`--perms sign_event:1,nip44_encrypt,…`). When present it
+        // rides along in the offer so a signer that honors `perms` (e.g. Amethyst's informed-consent
+        // sheet) can pre-grant exactly these ops. Blank is treated as absent.
+        val perms = args.flag("perms")?.ifBlank { null }
+        // `--nostrconnect` itself was consumed by LoginCommand on this same Args
+        // instance before delegating here, so a plain rejectUnknown suffices.
+        args.rejectUnknown()
+
+        val clientKey = KeyPair()
+        val code =
+            NostrConnectLoginUseCase.generateUri(
+                ephemeralKeyPair = clientKey,
+                relays = relays.map { it.url },
+                clientMetadata = name?.let { BunkerClientMetadata(name = it) },
+                perms = perms,
+            )
+
+        // Surface the offer immediately so the human/harness can paste it.
+        System.err.println("[nostrconnect] paste this into your signer within ${timeoutMs / 1000}s:")
+        System.err.println(code.uri)
+
+        val okhttp = OkHttpClient.Builder().socketFactory(TcpNoDelaySocketFactory).build()
+        val client = NostrClient(websocketBuilder = BasicOkHttpWebSocket.Builder { okhttp })
+        try {
+            client.connect()
+            // The shared flow: wait for the signer that proves the code's secret, then ask it which
+            // account it signs for. The signer's own key is only its transport key, so the account
+            // is what get_public_key answers, not the key that answered the code.
+            val login =
+                try {
+                    NostrConnectLoginUseCase.awaitAndLogin(
+                        uriData = code,
+                        client = client,
+                        connectTimeoutMs = timeoutMs,
+                        onAuthUrl = { url -> System.err.println("[nip46] authorize this request in a browser, then it will continue:\n  $url") },
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: SignerExceptions) {
+                    return Output.error("signer_error", "the signer connected but did not say which account it signs for: ${e.message}")
+                } catch (e: Exception) {
+                    return Output.error("timeout", "no signer connected within ${timeoutMs / 1000}s")
+                }
+            login.signer.closeSubscription()
+
+            val identity =
+                Identity.bunkerIdentity(
+                    signerPubkey = login.signer.remotePubkey,
+                    relays = code.relays.map { it.url },
+                    connectSecret = code.secret,
+                    clientPrivKeyHex = clientKey.privKey!!.toHexKey(),
+                    userPubkey = login.pubKeyHex,
+                )
+            dataDir.saveIdentity(identity)
+            Output.emit(
+                mapOf(
+                    "npub" to identity.npub,
+                    "hex" to identity.pubKeyHex,
+                    "read_only" to false,
+                    "signer" to "bunker",
+                    "bunker_relays" to identity.bunker?.relays,
+                    "data_dir" to dataDir.root.absolutePath,
+                ),
+            )
+            return 0
+        } finally {
+            client.close()
+        }
+    }
+}

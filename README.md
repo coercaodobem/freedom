@@ -1,11 +1,8 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 # Liberdade
 
 Cliente Nostr em PWA, com identidade guardada no aparelho, mensagens privadas NIP-17 e relay Geode portátil para Ubuntu. O código do produto está em [`freedom/`](freedom/README.md); a aplicação não depende de servidores do Liberdade para transportar mensagens.
 
-Esta branch de MVP parte do Amethyst e mantém o histórico upstream. O app web, os assets de execução e o pacote do relay estão dentro deste repositório. O cliente não baixa scripts executáveis de CDNs durante o uso.
+Esta branch de MVP parte do commit upstream [948135f](https://github.com/vitorpamplona/amethyst/tree/948135f7dbbae81d79a0b985282ce673397a7618). O código reutilizado mantém os avisos e a licença MIT originais. O teste de descriptografia usa dados sintéticos e chave efêmera gerada localmente. Nesta importação direta, a branch é registrada como um snapshot; o histórico Git completo permanece no repositório upstream. O app web, os assets de execução e o pacote do relay estão dentro deste repositório. O cliente não baixa scripts executáveis de CDNs durante o uso.
 
 ## Executar
 

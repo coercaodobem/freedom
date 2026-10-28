@@ -1,0 +1,599 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.desktop.ui.media
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.dp
+import com.vitorpamplona.amethyst.commons.icons.symbols.Icon
+import com.vitorpamplona.amethyst.commons.icons.symbols.MaterialSymbols
+import com.vitorpamplona.amethyst.commons.resources.Res
+import com.vitorpamplona.amethyst.commons.resources.close
+import com.vitorpamplona.amethyst.commons.resources.lightbox_copy_url
+import com.vitorpamplona.amethyst.commons.resources.lightbox_more_options
+import com.vitorpamplona.amethyst.commons.resources.lightbox_open_in_browser
+import com.vitorpamplona.amethyst.commons.resources.lightbox_previous
+import com.vitorpamplona.amethyst.commons.resources.next
+import com.vitorpamplona.amethyst.commons.resources.save
+import com.vitorpamplona.amethyst.commons.richtext.RichTextParser
+import com.vitorpamplona.amethyst.commons.ui.components.ZoomTransition
+import com.vitorpamplona.amethyst.commons.ui.components.zoomTransitionContainer
+import com.vitorpamplona.amethyst.commons.ui.components.zoomTransitionLayer
+import com.vitorpamplona.amethyst.commons.ui.stringRes
+import com.vitorpamplona.amethyst.desktop.platform.titleBarInsetTop
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.awt.Desktop
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
+import java.io.File
+import java.net.URI
+
+val LocalAwtWindow = compositionLocalOf<java.awt.Window?> { null }
+
+val LocalIsImmersiveFullscreen = compositionLocalOf { mutableStateOf(false) }
+
+enum class ViewMode { DEFAULT, FULLSCREEN }
+
+private sealed class DownloadState {
+    data object Idle : DownloadState()
+
+    data class Downloading(
+        val progress: Float,
+        val filename: String,
+    ) : DownloadState()
+
+    data class Done(
+        val file: File,
+    ) : DownloadState()
+
+    data class Failed(
+        val message: String,
+    ) : DownloadState()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LightboxOverlay(
+    urls: List<String>,
+    initialIndex: Int = 0,
+    initialSeekPosition: Float = 0f,
+    initialFullscreen: Boolean = false,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    transition: ZoomTransition? = null,
+    onIndexChanged: (Int) -> Unit = {},
+) {
+    var currentIndex by remember { mutableIntStateOf(initialIndex.coerceIn(0, urls.lastIndex)) }
+    // The viewer's transition closes into the thumbnail of the media on screen.
+    val currentOnIndexChanged by rememberUpdatedState(onIndexChanged)
+    LaunchedEffect(currentIndex) { currentOnIndexChanged(currentIndex) }
+    val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
+    var viewMode by remember { mutableStateOf(if (initialFullscreen) ViewMode.FULLSCREEN else ViewMode.DEFAULT) }
+    val awtWindow = LocalAwtWindow.current
+    val isImmersiveFullscreen = LocalIsImmersiveFullscreen.current
+
+    // Snackbar-like banner state for the "Copied … to clipboard"
+    // confirmation. Auto-dismisses after 2.5 s.
+    var copyConfirmation by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(copyConfirmation) {
+        if (copyConfirmation != null) {
+            delay(2500)
+            copyConfirmation = null
+        }
+    }
+
+    fun copyUrlToClipboard(url: String) {
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(url), null)
+        copyConfirmation = url
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    // Sync exclusive fullscreen with viewMode and signal parent layouts
+    LaunchedEffect(viewMode) {
+        isImmersiveFullscreen.value = viewMode == ViewMode.FULLSCREEN
+        if (viewMode == ViewMode.FULLSCREEN) {
+            awtWindow?.let { FullscreenHelper.enterFullscreen(it) }
+        } else {
+            if (FullscreenHelper.isFullscreen()) FullscreenHelper.exitFullscreen()
+        }
+    }
+
+    // Restore fullscreen on dismiss
+    DisposableEffect(Unit) {
+        onDispose {
+            isImmersiveFullscreen.value = false
+            if (FullscreenHelper.isFullscreen()) FullscreenHelper.exitFullscreen()
+        }
+    }
+
+    // Auto-dismiss banner after 3s
+    LaunchedEffect(downloadState) {
+        if (downloadState is DownloadState.Done || downloadState is DownloadState.Failed) {
+            delay(3000)
+            downloadState = DownloadState.Idle
+        }
+    }
+
+    val currentUrl = urls[currentIndex]
+    val isVideo = RichTextParser.isVideoUrl(currentUrl)
+
+    fun triggerSave() {
+        if (downloadState is DownloadState.Downloading) return
+        val url = urls[currentIndex]
+        val filename = url.substringAfterLast('/').substringBefore('?').ifBlank { "media" }
+        downloadState = DownloadState.Downloading(progress = -1f, filename = filename)
+        scope.launch {
+            val result =
+                SaveMediaAction.saveMedia(
+                    url = url,
+                    onProgress = { downloaded, total ->
+                        val progress = if (total > 0) downloaded.toFloat() / total else -1f
+                        downloadState = DownloadState.Downloading(progress = progress, filename = filename)
+                    },
+                )
+            downloadState =
+                if (result != null) {
+                    DownloadState.Done(result)
+                } else {
+                    DownloadState.Failed("Download failed")
+                }
+        }
+    }
+
+    fun toggleFullscreen() {
+        viewMode =
+            if (viewMode == ViewMode.FULLSCREEN) ViewMode.DEFAULT else ViewMode.FULLSCREEN
+    }
+
+    // Content modifier based on view mode
+    val contentModifier =
+        if (viewMode == ViewMode.DEFAULT) {
+            Modifier.fillMaxSize().padding(48.dp)
+        } else {
+            Modifier.fillMaxSize()
+        }
+
+    // With a transition the media grows out of its thumbnail while the backdrop and the controls
+    // fade in alongside, and the reverse on the way out.
+    val backdrop = if (viewMode == ViewMode.FULLSCREEN) Color.Black else Color.Black.copy(alpha = 0.9f)
+    val fadeWithTransition = Modifier.graphicsLayer { alpha = transition?.progress ?: 1f }
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .then(if (transition != null) Modifier.zoomTransitionContainer(transition) else Modifier)
+                .drawBehind { drawRect(backdrop.copy(alpha = backdrop.alpha * (transition?.progress ?: 1f))) }
+                .focusRequester(focusRequester)
+                // A focus target, or requestFocus() finds none and Escape and the arrows never arrive.
+                .focusable()
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (event.key) {
+                        Key.Escape -> {
+                            if (viewMode == ViewMode.FULLSCREEN) {
+                                viewMode = ViewMode.DEFAULT
+                            } else {
+                                onDismiss()
+                            }
+                            true
+                        }
+
+                        Key.F -> {
+                            toggleFullscreen()
+                            true
+                        }
+
+                        Key.DirectionLeft -> {
+                            if (currentIndex > 0) currentIndex--
+                            true
+                        }
+
+                        Key.DirectionRight -> {
+                            if (currentIndex < urls.lastIndex) currentIndex++
+                            true
+                        }
+
+                        Key.S -> {
+                            if (event.isCtrlPressed || event.isMetaPressed) {
+                                triggerSave()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        else -> {
+                            false
+                        }
+                    }
+                }.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    if (viewMode != ViewMode.FULLSCREEN) onDismiss()
+                },
+    ) {
+        // Main content — video or image, in the layer that grows out of the thumbnail
+        Box(Modifier.fillMaxSize().then(if (transition != null) Modifier.zoomTransitionLayer(transition) else Modifier)) {
+            if (isVideo) {
+                Box(
+                    modifier =
+                        contentModifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            // Consume clicks so backdrop dismiss doesn't fire
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    DesktopVideoPlayer(
+                        url = currentUrl,
+                        autoPlay = true,
+                        initialSeekPosition = if (currentIndex == initialIndex) initialSeekPosition else 0f,
+                        viewMode = viewMode,
+                        onViewModeChange = { newMode ->
+                            viewMode = newMode
+                        },
+                        modifier =
+                            (
+                                if (viewMode == ViewMode.DEFAULT) {
+                                    Modifier.widthIn(max = 1200.dp)
+                                } else {
+                                    Modifier
+                                }
+                            ).onGloballyPositioned { transition?.onMediaPositioned(it, null) },
+                        trailingControls = {
+                            MoreOptionsMenu(
+                                menuExpanded = menuExpanded,
+                                onExpandMenu = { menuExpanded = true },
+                                onDismissMenu = { menuExpanded = false },
+                                onSave = { triggerSave() },
+                                onCopyUrl = { copyUrlToClipboard(urls[currentIndex]) },
+                                onOpenInBrowser = {
+                                    Desktop.getDesktop().browse(URI(urls[currentIndex]))
+                                },
+                            )
+                        },
+                    )
+                }
+            } else {
+                ZoomableImage(
+                    url = currentUrl,
+                    modifier = contentModifier,
+                    onMediaPositioned = transition?.let { it::onMediaPositioned },
+                )
+            }
+        }
+
+        // Download banner (top)
+        AnimatedVisibility(
+            visible = downloadState !is DownloadState.Idle,
+            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+            enter = slideInVertically() + fadeIn(),
+            exit = slideOutVertically() + fadeOut(),
+        ) {
+            val state = downloadState
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            when (state) {
+                                is DownloadState.Failed -> MaterialTheme.colorScheme.errorContainer
+                                is DownloadState.Done -> Color(0xFF2E7D32)
+                                else -> Color(0xFF1565C0)
+                            },
+                        ).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                when (state) {
+                    is DownloadState.Downloading -> {
+                        Text(
+                            state.filename,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        if (state.progress >= 0f) {
+                            LinearProgressIndicator(
+                                progress = { state.progress },
+                                modifier = Modifier.width(120.dp),
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.3f),
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier.width(120.dp),
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.3f),
+                            )
+                        }
+                    }
+
+                    is DownloadState.Done -> {
+                        Icon(
+                            MaterialSymbols.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Saved to ${state.file.name}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    is DownloadState.Failed -> {
+                        Icon(
+                            MaterialSymbols.Error,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            state.message,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    is DownloadState.Idle -> {}
+                }
+            }
+        }
+
+        // Copy-to-clipboard confirmation snackbar. Slides in below
+        // the download banner so the two can stack if both fire.
+        AnimatedVisibility(
+            visible = copyConfirmation != null,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = if (downloadState is DownloadState.Idle) 0.dp else 40.dp),
+            enter = slideInVertically() + fadeIn(),
+            exit = slideOutVertically() + fadeOut(),
+        ) {
+            copyConfirmation?.let { url ->
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF2E7D32))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        MaterialSymbols.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Copied $url to clipboard",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
+        }
+
+        // "..." menu (bottom right) — only for images; videos get it in the controls bar
+        // Hidden in fullscreen to keep the view immersive
+        if (!isVideo && viewMode != ViewMode.FULLSCREEN) {
+            Box(
+                modifier = Modifier.align(Alignment.BottomEnd).then(fadeWithTransition).padding(16.dp),
+            ) {
+                MoreOptionsMenu(
+                    menuExpanded = menuExpanded,
+                    onExpandMenu = { menuExpanded = true },
+                    onDismissMenu = { menuExpanded = false },
+                    onSave = { triggerSave() },
+                    onCopyUrl = { copyUrlToClipboard(urls[currentIndex]) },
+                    onOpenInBrowser = {
+                        Desktop.getDesktop().browse(URI(urls[currentIndex]))
+                    },
+                )
+            }
+        }
+
+        // Close button (top-left) — hidden in fullscreen. Below macOS's window buttons: the viewer
+        // covers the whole window, title bar included.
+        if (viewMode != ViewMode.FULLSCREEN) {
+            IconButton(
+                onClick = onDismiss,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .then(fadeWithTransition)
+                        .padding(start = 8.dp, top = titleBarInsetTop + 8.dp, end = 8.dp, bottom = 8.dp),
+            ) {
+                Icon(
+                    MaterialSymbols.Close,
+                    contentDescription = stringRes(Res.string.close),
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+        }
+
+        // Image counter (bottom-center) — hidden in fullscreen
+        if (urls.size > 1 && viewMode != ViewMode.FULLSCREEN) {
+            Text(
+                text = "${currentIndex + 1} / ${urls.size}",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .then(fadeWithTransition)
+                        .padding(16.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), MaterialTheme.shapes.large)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+
+        // Navigation arrows — hidden in fullscreen
+        if (urls.size > 1 && viewMode != ViewMode.FULLSCREEN) {
+            if (currentIndex > 0) {
+                IconButton(
+                    onClick = { currentIndex-- },
+                    modifier = Modifier.align(Alignment.CenterStart).then(fadeWithTransition).padding(16.dp),
+                ) {
+                    Icon(
+                        MaterialSymbols.AutoMirrored.ArrowBack,
+                        contentDescription = stringRes(Res.string.lightbox_previous),
+                        tint = Color.White,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+
+            if (currentIndex < urls.lastIndex) {
+                IconButton(
+                    onClick = { currentIndex++ },
+                    modifier = Modifier.align(Alignment.CenterEnd).then(fadeWithTransition).padding(16.dp),
+                ) {
+                    Icon(
+                        MaterialSymbols.AutoMirrored.ArrowForward,
+                        contentDescription = stringRes(Res.string.next),
+                        tint = Color.White,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoreOptionsMenu(
+    menuExpanded: Boolean,
+    onExpandMenu: () -> Unit,
+    onDismissMenu: () -> Unit,
+    onSave: () -> Unit,
+    onCopyUrl: () -> Unit,
+    onOpenInBrowser: () -> Unit,
+) {
+    Box {
+        IconButton(onClick = onExpandMenu, modifier = Modifier.size(32.dp)) {
+            Icon(
+                MaterialSymbols.MoreVert,
+                contentDescription = stringRes(Res.string.lightbox_more_options),
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = onDismissMenu,
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringRes(Res.string.save)) },
+                leadingIcon = { Icon(MaterialSymbols.Save, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onSave()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringRes(Res.string.lightbox_copy_url)) },
+                leadingIcon = { Icon(MaterialSymbols.ContentCopy, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onCopyUrl()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringRes(Res.string.lightbox_open_in_browser)) },
+                leadingIcon = { Icon(MaterialSymbols.OpenInBrowser, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onOpenInBrowser()
+                },
+            )
+        }
+    }
+}

@@ -1,0 +1,118 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.commons.ui.screen.loggedIn.gitRepositories
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vitorpamplona.amethyst.commons.feeds.FeedContentState
+import com.vitorpamplona.amethyst.commons.model.navigation.Route
+import com.vitorpamplona.amethyst.commons.ui.feeds.RefresheableBox
+import com.vitorpamplona.amethyst.commons.ui.feeds.RenderFeedContentState
+import com.vitorpamplona.amethyst.commons.ui.feeds.SaveableFeedContentState
+import com.vitorpamplona.amethyst.commons.ui.feeds.ScrollStateKeys
+import com.vitorpamplona.amethyst.commons.ui.feeds.WatchLifecycleAndUpdateModel
+import com.vitorpamplona.amethyst.commons.ui.layouts.DisappearingScaffold
+import com.vitorpamplona.amethyst.commons.ui.navigation.bottombars.FabBottomBarPadded
+import com.vitorpamplona.amethyst.commons.ui.navigation.navs.INav
+import com.vitorpamplona.amethyst.commons.ui.platform.AppBottomBar
+import com.vitorpamplona.amethyst.commons.ui.screen.loggedIn.gitRepositories.datasource.GitRepositoriesFilterAssemblerSubscription
+import com.vitorpamplona.amethyst.commons.viewmodels.AccountViewModel
+
+@Composable
+fun GitRepositoriesScreen(
+    accountViewModel: AccountViewModel,
+    nav: INav,
+) {
+    GitRepositoriesScreen(
+        gitRepositoriesFeedContentState = accountViewModel.feedStates.gitRepositoriesFeed,
+        accountViewModel = accountViewModel,
+        nav = nav,
+    )
+}
+
+/**
+ * The repositories of the selected list. Searching them is the top bar's search button, which
+ * opens the full search already narrowed to `kind:git`; the floating button announces a new one.
+ */
+@Composable
+fun GitRepositoriesScreen(
+    gitRepositoriesFeedContentState: FeedContentState,
+    accountViewModel: AccountViewModel,
+    nav: INav,
+) {
+    WatchLifecycleAndUpdateModel(gitRepositoriesFeedContentState)
+    WatchAccountForGitRepositoriesScreen(gitRepositoriesFeedContentState = gitRepositoriesFeedContentState, accountViewModel = accountViewModel)
+    GitRepositoriesFilterAssemblerSubscription(accountViewModel)
+
+    DisappearingScaffold(
+        isInvertedLayout = false,
+        topBar = {
+            GitRepositoriesTopBar(
+                accountViewModel = accountViewModel,
+                nav = nav,
+            )
+        },
+        bottomBar = {
+            AppBottomBar(Route.GitRepositories, nav, accountViewModel) { route ->
+                if (route == Route.GitRepositories) {
+                    gitRepositoriesFeedContentState.sendToTop()
+                } else {
+                    nav.navBottomBar(route)
+                }
+            }
+        },
+        floatingButton = {
+            FabBottomBarPadded(nav) {
+                NewGitRepositoryButton(nav)
+            }
+        },
+        accountViewModel = accountViewModel,
+    ) {
+        RefresheableBox(gitRepositoriesFeedContentState, true) {
+            SaveableFeedContentState(gitRepositoriesFeedContentState, scrollStateKey = ScrollStateKeys.GIT_REPOSITORIES_SCREEN) { listState ->
+                RenderFeedContentState(
+                    feedContentState = gitRepositoriesFeedContentState,
+                    accountViewModel = accountViewModel,
+                    listState = listState,
+                    nav = nav,
+                    routeForLastRead = "GitRepositoriesFeed",
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WatchAccountForGitRepositoriesScreen(
+    gitRepositoriesFeedContentState: FeedContentState,
+    accountViewModel: AccountViewModel,
+) {
+    val listState by accountViewModel.account.liveGitRepositoriesFollowLists.collectAsStateWithLifecycle()
+    val hiddenUsers =
+        accountViewModel.account.hiddenUsers.flow
+            .collectAsStateWithLifecycle()
+
+    LaunchedEffect(accountViewModel, listState, hiddenUsers) {
+        gitRepositoriesFeedContentState.checkKeysInvalidateDataAndSendToTop()
+    }
+}

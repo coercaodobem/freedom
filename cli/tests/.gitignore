@@ -1,0 +1,16 @@
+marmot/state/
+marmot/state-headless/
+dm/state-dm-headless/
+cache/state-cache-headless/
+nests/state/
+clink/state-clink-headless/
+relaygroup/state-relaygroup-headless/
+sync/state-sync-deletions/
+blossom/state-blossom-live/
+git/state-git-nip34/
+buzz/state-job-loop/
+buzz/state-workflow-loop/
+buzz/state-agent-exec/
+marmot/state-repro/
+notes/state-notes-headless/
+emoji/state-emoji-headless/

@@ -1,0 +1,5 @@
+format=1
+filename=geode-1.20.0-linux-x64.tar.gz
+parts=130
+chunk_size=524288
+sha256=9722c226dc59c45d50f9f8c1e22ad815fd6fb971413c7da3aa7fc36253e6d1a7

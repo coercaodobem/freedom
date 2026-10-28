@@ -1,0 +1,254 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.desktop.tor
+
+import com.vitorpamplona.amethyst.commons.tor.ITorManager
+import com.vitorpamplona.amethyst.commons.tor.TOR_STUCK_AFTER_MS
+import com.vitorpamplona.amethyst.commons.tor.TorServiceStatus
+import com.vitorpamplona.amethyst.commons.tor.TorType
+import com.vitorpamplona.amethyst.commons.tor.stuckAfter
+import com.vitorpamplona.amethyst.commons.util.restrictToOwner
+import com.vitorpamplona.amethyst.desktop.app.DesktopInstance
+import com.vitorpamplona.quartz.utils.Log
+import io.matthewnelson.kmp.tor.resource.exec.tor.ResourceLoaderTorExec
+import io.matthewnelson.kmp.tor.runtime.Action.Companion.startDaemonAsync
+import io.matthewnelson.kmp.tor.runtime.Action.Companion.stopDaemonAsync
+import io.matthewnelson.kmp.tor.runtime.Action.Companion.stopDaemonSync
+import io.matthewnelson.kmp.tor.runtime.RuntimeEvent
+import io.matthewnelson.kmp.tor.runtime.TorRuntime
+import io.matthewnelson.kmp.tor.runtime.TorState
+import io.matthewnelson.kmp.tor.runtime.core.OnEvent
+import io.matthewnelson.kmp.tor.runtime.core.OnFailure
+import io.matthewnelson.kmp.tor.runtime.core.OnSuccess
+import io.matthewnelson.kmp.tor.runtime.core.TorEvent
+import io.matthewnelson.kmp.tor.runtime.core.config.TorOption
+import io.matthewnelson.kmp.tor.runtime.core.ctrl.TorCmd
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.io.File
+
+/**
+ * Desktop Tor daemon manager using kmp-tor.
+ *
+ * Reactive: automatically starts/stops Tor daemon based on [torTypeFlow] changes.
+ * Supports INTERNAL (embedded kmp-tor) and EXTERNAL (user-provided SOCKS port) modes.
+ */
+class DesktopTorManager(
+    private val torTypeFlow: StateFlow<TorType>,
+    private val externalPortFlow: StateFlow<Int>,
+    private val scope: CoroutineScope,
+) : ITorManager {
+    private val _status = MutableStateFlow<TorServiceStatus>(TorServiceStatus.Off)
+    override val status: StateFlow<TorServiceStatus> = _status.asStateFlow()
+
+    override val activePortOrNull: StateFlow<Int?> =
+        _status
+            .map { it.socksPort }
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * Tor has been starting for a minute without a SOCKS port, or failed to start. A network that
+     * blocks Tor leaves the daemon connecting forever without an error, so only the wait tells the
+     * user why the relays routed through Tor never answer.
+     */
+    val stuck: StateFlow<Boolean> =
+        _status
+            .stuckAfter(TOR_STUCK_AFTER_MS)
+            .stateIn(scope, SharingStarted.Eagerly, false)
+
+    private val runtime: TorRuntime by lazy {
+        TorRuntime.Builder(desktopEnvironment()) {
+            observerStatic(
+                RuntimeEvent.LISTENERS,
+                OnEvent.Executor.Immediate,
+                OnEvent { listeners ->
+                    val port =
+                        listeners.socks
+                            .firstOrNull()
+                            ?.port
+                            ?.value
+                    if (port != null) {
+                        _status.value = TorServiceStatus.Active(port)
+                    }
+                },
+            )
+
+            observerStatic(
+                RuntimeEvent.STATE,
+                OnEvent.Executor.Immediate,
+                OnEvent { state ->
+                    val daemon = state.daemon
+                    when {
+                        daemon is TorState.Daemon.Off -> {
+                            _status.value = TorServiceStatus.Off
+                        }
+
+                        daemon is TorState.Daemon.Starting -> {
+                            _status.value = TorServiceStatus.Connecting
+                        }
+
+                        daemon is TorState.Daemon.Stopping -> {
+                            _status.value = TorServiceStatus.Connecting
+                        }
+                    }
+                },
+            )
+
+            // A daemon that fails or exits (a bad config, a folder another daemon holds) otherwise
+            // leaves the status at Connecting with nothing in the log.
+            observerStatic(
+                RuntimeEvent.ERROR,
+                OnEvent.Executor.Immediate,
+                OnEvent { error -> Log.w(TAG, "Tor runtime error", error) },
+            )
+
+            // Suppress verbose logging to prevent relay hostname leaks
+            required(TorEvent.ERR)
+            required(TorEvent.WARN)
+
+            config { _ ->
+                TorOption.__SocksPort.configure { auto() }
+            }
+        }
+    }
+
+    init {
+        // Reactive: auto-derive Tor lifecycle from settings changes
+        scope.launch {
+            torTypeFlow.collect { mode ->
+                when (mode) {
+                    TorType.INTERNAL -> {
+                        _status.value = TorServiceStatus.Connecting
+                        // Retry start — previous daemon may still be stopping
+                        var started = false
+                        for (attempt in 1..3) {
+                            try {
+                                runtime.startDaemonAsync()
+                                started = true
+                                break
+                            } catch (e: Exception) {
+                                currentCoroutineContext().ensureActive()
+                                if (attempt < 3) {
+                                    Log.d(TAG) { "Start attempt $attempt failed, retrying..." }
+                                    delay(1000L * attempt)
+                                } else {
+                                    Log.e(TAG, "Failed to start Tor after 3 attempts", e)
+                                    _status.value = TorServiceStatus.Error(e.message ?: "Unknown error")
+                                }
+                            }
+                        }
+                    }
+
+                    TorType.EXTERNAL -> {
+                        _status.value = TorServiceStatus.Active(externalPortFlow.value)
+                    }
+
+                    TorType.OFF -> {
+                        try {
+                            runtime.stopDaemonAsync()
+                        } catch (_: Exception) {
+                            // May not be running
+                        }
+                        _status.value = TorServiceStatus.Off
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun dormant() {
+        if (_status.value is TorServiceStatus.Active) {
+            runtime.enqueue(TorCmd.Signal.Dormant, OnFailure.noOp(), OnSuccess.noOp())
+        }
+    }
+
+    override suspend fun active() {
+        if (_status.value is TorServiceStatus.Active) {
+            runtime.enqueue(TorCmd.Signal.Active, OnFailure.noOp(), OnSuccess.noOp())
+        }
+    }
+
+    override suspend fun newIdentity() {
+        if (_status.value is TorServiceStatus.Active) {
+            runtime.enqueue(TorCmd.Signal.NewNym, OnFailure.noOp(), OnSuccess.noOp())
+        }
+    }
+
+    /** Call from shutdown hook to stop Tor synchronously. Waits for daemon exit. */
+    fun stopSync() {
+        // Never started (Tor off, the default): nothing to wait a second for on every quit.
+        if (_status.value == TorServiceStatus.Off) return
+        try {
+            runtime.stopDaemonSync()
+            // Wait for daemon process to fully exit
+            Thread.sleep(1000)
+        } catch (_: Exception) {
+            // Best-effort
+        }
+    }
+
+    companion object {
+        private const val TAG = "DesktopTorManager"
+
+        private fun desktopEnvironment(): TorRuntime.Environment {
+            // Tor locks its data directory: a second copy of the app gets a folder of its own.
+            val appDir = DesktopInstance.ownFolder(DesktopInstance.PerCopyFolder.TOR)
+            appDir.mkdirs()
+            // Owner-only (700) — Tor state includes onion keys.
+            appDir.restrictToOwner(TAG)
+
+            return TorRuntime.Environment.Builder(
+                workDirectory = appDir.resolve("work"),
+                cacheDirectory = appDir.resolve("cache"),
+                loader = ResourceLoaderTorExec::getOrCreate,
+            ) {}
+        }
+
+        /** OS-specific data directory for Tor. */
+        internal fun torDataDirectory(): File {
+            val osName = System.getProperty("os.name", "").lowercase()
+            val home = System.getProperty("user.home") ?: "."
+            return when {
+                osName.contains("mac") -> {
+                    File(home, "Library/Application Support/Amethyst/tor")
+                }
+
+                osName.contains("win") -> {
+                    File(System.getenv("APPDATA") ?: "$home/AppData/Roaming", "Amethyst/tor")
+                }
+
+                else -> {
+                    val xdgData = System.getenv("XDG_DATA_HOME") ?: "$home/.local/share"
+                    File(xdgData, "Amethyst/tor")
+                }
+            }
+        }
+    }
+}

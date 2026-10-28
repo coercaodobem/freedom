@@ -1,0 +1,142 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.cli.stores
+
+import com.vitorpamplona.amethyst.cli.CliJson
+import com.vitorpamplona.amethyst.cli.SecureFileIO
+import kotlinx.serialization.Serializable
+import java.io.File
+
+/**
+ * A joined/created Concord community persisted locally so later `send`/`read`/
+ * `channels` runs can re-derive its planes. Holds the community's secrets, so the
+ * file is written 0600 via [SecureFileIO].
+ */
+@Serializable
+data class StoredCommunity(
+    val name: String = "",
+    val communityId: String = "",
+    val owner: String = "",
+    val ownerSalt: String = "",
+    val root: String = "",
+    val rootEpoch: Long = 0,
+    // The Control Plane signer's pubkey at [rootEpoch] (CORD-02 §2): read access, never write.
+    // Blank = a legacy, pre-split community, whose Control Plane is keyed the old way.
+    val controlPk: String = "",
+    // The staff write key at [rootEpoch], held only when this account is the owner or staff
+    // (CORD-02 §2). Blank for a regular member, who can read the plane but not publish to it.
+    val controlRoot: String = "",
+    val generalChannelId: String = "",
+    val relays: List<String> = emptyList(),
+    // Past access roots kept per epoch (CORD-06 Refounding rotates the root). Lets `read --epoch <n>`
+    // re-derive a prior epoch's Chat Plane to reach pre-refounding history. Populated by `import`.
+    val heldRoots: List<StoredHeldRoot> = emptyList(),
+    // The bare `<naddr>#<fragment>` invite this membership was joined through — the stranded-recovery
+    // anchor (CORD-05/06). A Refounding carries no recipient list, so a member simply left out of the
+    // rekey has no message to miss: re-resolving this link is the only way back. Blank for a direct
+    // invite or a community joined before amy stored it.
+    val inviteRef: String = "",
+    // Private Channel keys this account holds (CORD-03 §1), from the Community List or an invite.
+    // A private channel is read and written ONLY on the plane its own key derives; without one it
+    // is unreadable and `send` refuses rather than fall back to the root-derived plane.
+    val privateChannels: List<StoredPrivateChannel> = emptyList(),
+    // Per Private Channel, the channel epoch whose rotation cut this account out (CORD-06 §2; the
+    // reference client's `channel_cuts`): a key below it is never adopted again from a bundle.
+    val channelCuts: Map<String, Long> = emptyMap(),
+    // Channel keys reserved for a Private Channel rotation this account started but has not yet
+    // adopted, keyed "channelId:newEpoch:prevcommit" (CORD-06): a retried `channel rekey` must
+    // re-deliver the SAME key, never a sibling that splits the members at one epoch.
+    val pendingChannelRotations: Map<String, String> = emptyMap(),
+    // Keys reserved for a Refounding this account started but has not yet adopted (CORD-06 §3): a
+    // retried `refound` must re-deliver the SAME root, never mint a sibling that splits the members.
+    val pendingRefounding: StoredPendingRefounding? = null,
+    // When this membership began (ms, the Community List's `added_at`). A Kick older than this
+    // judged an earlier membership that a re-join put behind us (CORD-04 §6). 0 = unknown, stored
+    // before amy tracked it: then any honored Kick that is still our latest Guestbook motion counts.
+    val addedAt: Long = 0,
+)
+
+/** A held Private Channel key at its channel epoch, mirroring quartz `PrivateChannelKey`. */
+@Serializable
+data class StoredPrivateChannel(
+    val channelId: String = "",
+    val key: String = "",
+    val epoch: Long = 0,
+    val name: String = "",
+)
+
+/** A Refounding's reserved keys, mirroring quartz `PendingRefounding`. */
+@Serializable
+data class StoredPendingRefounding(
+    val rootEpoch: Long = 0,
+    val prevCommit: String = "",
+    val newRoot: String = "",
+    val newControlRoot: String = "",
+)
+
+/** A past community_root for a specific epoch, mirroring quartz `HeldRoot`. */
+@Serializable
+data class StoredHeldRoot(
+    val epoch: Long = 0,
+    val root: String = "",
+    /** That epoch's Control Plane address; blank for a legacy, pre-split epoch (CORD-02 §5). */
+    val controlPk: String = "",
+    /**
+     * That epoch's staff write key, banked only if we held it. A relay that gates the prior epoch's
+     * Control Plane on NIP-42 AUTH as the stream key will not serve those wraps without it — and
+     * those wraps are what rebuild the anti-rollback floor.
+     */
+    val controlRoot: String = "",
+)
+
+/**
+ * File-backed list of the account's Concord communities at `~/.amy/<account>/
+ * concord.json`. Reloaded per run (no in-process cache), matching Amy's
+ * stateless-per-invocation model.
+ */
+class ConcordStore(
+    private val file: File,
+) {
+    fun load(): List<StoredCommunity> =
+        if (file.exists()) {
+            runCatching { CliJson.files.decodeFromString<List<StoredCommunity>>(file.readText()) }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+
+    fun save(list: List<StoredCommunity>) = SecureFileIO.writeTextAtomic(file, CliJson.files.encodeToString(list))
+
+    /** Insert or replace by community id, keyed on the self-certifying id. */
+    fun upsert(community: StoredCommunity) {
+        val next = load().filterNot { it.communityId == community.communityId } + community
+        save(next)
+    }
+
+    /** Drop [communityId] from the list, as a Leave or a complied-with Kick does locally. */
+    fun remove(communityId: String) = save(load().filterNot { it.communityId == communityId })
+
+    /** Resolve a user-supplied handle: exact name, exact id, or a unique id/name prefix. */
+    fun find(handle: String): StoredCommunity? {
+        val all = load()
+        return all.firstOrNull { it.name == handle || it.communityId == handle }
+            ?: all.singleOrNull { it.communityId.startsWith(handle) || it.name.startsWith(handle) }
+    }
+}

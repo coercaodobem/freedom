@@ -1,0 +1,180 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.desktop.platform
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.vitorpamplona.quartz.utils.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.withContext
+import java.awt.Window
+import java.awt.event.WindowEvent
+import java.awt.event.WindowFocusListener
+import java.util.concurrent.TimeUnit
+
+/**
+ * Reads the OS's preferred light/dark appearance.
+ *
+ * - macOS: `defaults read -g AppleInterfaceStyle` returns "Dark" only when dark is on.
+ * - GNOME: `gsettings get org.gnome.desktop.interface color-scheme` → 'prefer-dark' / 'prefer-light' / 'default'.
+ * - KDE: `kreadconfig5 --group General --key ColorScheme` (or kreadconfig6) — name contains "Dark" when dark.
+ * - Windows: HKCU AppsUseLightTheme registry value (0 = dark).
+ *
+ * Detection is stale-tolerant: re-runs on window focus so users who flip their
+ * system theme see Amethyst follow within a second of bringing the window forward.
+ */
+object PlatformAppearance {
+    /** The preference when the app started: read once, ahead of the first frame, so it opens in the right theme. */
+    val startupDark: Boolean by lazy { isSystemDark() }
+
+    /**
+     * Resolves the OS dark/light preference, with an override hook for testing
+     * on a single machine: `-Damethyst.appearance=light|dark` (system property)
+     * or `AMETHYST_APPEARANCE=light|dark` (env var).
+     *
+     * When the platform is overridden but appearance isn't, this calls the
+     * override platform's detection routine. On a Mac forced to GNOME the
+     * `gsettings` shell-out won't exist and it falls through to the GNOME
+     * default (dark) — pass `AMETHYST_APPEARANCE=light` to flip it.
+     */
+    fun isSystemDark(): Boolean {
+        forcedAppearance()?.let { return it }
+        return when (PlatformInfo.current) {
+            Platform.MACOS -> isMacOSDark()
+            Platform.GNOME -> isGnomeDark()
+            Platform.KDE -> isKdeDark()
+            Platform.WINDOWS -> isWindowsDark()
+            else -> true
+        }
+    }
+
+    private fun forcedAppearance(): Boolean? {
+        val raw =
+            System.getProperty("amethyst.appearance")
+                ?: System.getenv("AMETHYST_APPEARANCE")
+                ?: return null
+        return when (raw.lowercase()) {
+            "dark" -> true
+            "light" -> false
+            else -> null
+        }
+    }
+
+    private fun isMacOSDark(): Boolean {
+        val out = exec("defaults", "read", "-g", "AppleInterfaceStyle") ?: return false
+        return out.contains("Dark", ignoreCase = true)
+    }
+
+    private fun isGnomeDark(): Boolean {
+        val out = exec("gsettings", "get", "org.gnome.desktop.interface", "color-scheme") ?: return true
+        if (out.contains("prefer-dark", ignoreCase = true)) return true
+        if (out.contains("prefer-light", ignoreCase = true)) return false
+        // 'default' → fall back to legacy gtk-theme heuristic
+        val theme = exec("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme").orEmpty()
+        return theme.contains("dark", ignoreCase = true)
+    }
+
+    private fun isKdeDark(): Boolean {
+        // Try Plasma 6 first, fall back to 5.
+        val tools = listOf("kreadconfig6", "kreadconfig5")
+        for (tool in tools) {
+            val out = exec(tool, "--group", "General", "--key", "ColorScheme")
+            if (!out.isNullOrBlank()) return out.contains("dark", ignoreCase = true)
+        }
+        return true
+    }
+
+    private fun isWindowsDark(): Boolean {
+        val out =
+            exec(
+                "reg",
+                "query",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ) ?: return false
+        // Output line looks like: "    AppsUseLightTheme    REG_DWORD    0x0"
+        val match = Regex("AppsUseLightTheme\\s+REG_DWORD\\s+0x([0-9a-fA-F]+)").find(out) ?: return false
+        return match.groupValues[1].toIntOrNull(16) == 0
+    }
+
+    /**
+     * The trimmed output of [cmd], or null if it fails, exits non-zero or takes over 2 s. It waits
+     * first and reads after: reading first would block until the child closes its output, which a
+     * child that leaves a daemon holding it (gsettings starting dconf) never does, so the timeout
+     * would never apply. The answers are a line or two, well within the pipe's buffer.
+     */
+    private fun exec(vararg cmd: String): String? =
+        try {
+            val proc =
+                ProcessBuilder(*cmd)
+                    .redirectErrorStream(true)
+                    .start()
+            if (!proc.waitFor(2, TimeUnit.SECONDS)) {
+                proc.destroyForcibly()
+                null
+            } else if (proc.exitValue() != 0) {
+                null
+            } else {
+                proc.inputStream
+                    .bufferedReader()
+                    .readText()
+                    .trim()
+            }
+        } catch (e: Exception) {
+            Log.d("PlatformAppearance") { "Failed to exec ${cmd.joinToString(" ")}: ${e.message}" }
+            null
+        }
+}
+
+/**
+ * The OS dark/light preference, re-read whenever [awtWindow] gains focus (the OSes have no portable
+ * change event, and focus is when a user who just flipped it comes back). It starts from
+ * [PlatformAppearance.startupDark], and the re-reads shell out off the UI thread.
+ */
+@Composable
+fun rememberSystemDark(awtWindow: Window?): State<Boolean> {
+    val state = remember { mutableStateOf(PlatformAppearance.startupDark) }
+    LaunchedEffect(awtWindow) {
+        if (awtWindow == null) return@LaunchedEffect
+        callbackFlow {
+            val listener =
+                object : WindowFocusListener {
+                    override fun windowGainedFocus(e: WindowEvent?) {
+                        trySend(Unit)
+                    }
+
+                    override fun windowLostFocus(e: WindowEvent?) = Unit
+                }
+            awtWindow.addWindowFocusListener(listener)
+            awaitClose { awtWindow.removeWindowFocusListener(listener) }
+        }.conflate().collect {
+            state.value = withContext(Dispatchers.IO) { PlatformAppearance.isSystemDark() }
+        }
+    }
+    return state
+}

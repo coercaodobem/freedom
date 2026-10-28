@@ -1,0 +1,305 @@
+/*
+ * Copyright (c) 2025 Vitor Pamplona
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ * Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+package com.vitorpamplona.amethyst.desktop.ui.notifications
+
+import com.vitorpamplona.amethyst.commons.model.Note
+import com.vitorpamplona.amethyst.commons.model.cache.ICacheEventStream
+import com.vitorpamplona.amethyst.commons.moderation.notifications.NotifKind
+import com.vitorpamplona.amethyst.commons.moderation.notifications.NotificationDispatcher
+import com.vitorpamplona.amethyst.commons.moderation.notifications.NotificationKinds
+import com.vitorpamplona.amethyst.commons.moderation.notifications.NotificationSettings
+import com.vitorpamplona.amethyst.commons.moderation.notifications.NotificationSpec
+import com.vitorpamplona.amethyst.commons.moderation.notifications.PermissionState
+import com.vitorpamplona.amethyst.commons.moderation.notifications.nowEpochSeconds
+import com.vitorpamplona.amethyst.commons.moderation.notifications.sanitizeForToast
+import com.vitorpamplona.amethyst.commons.notifications.NotificationMessage
+import com.vitorpamplona.amethyst.commons.resources.Res
+import com.vitorpamplona.amethyst.commons.resources.calendar_reminder_default_title
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_dm
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_follow
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_mention
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_reaction
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_reply
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_repost
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_someone
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_zap
+import com.vitorpamplona.amethyst.commons.resources.desktop_notification_zap_amount
+import com.vitorpamplona.amethyst.commons.ui.loadStringRes
+import com.vitorpamplona.quartz.nip01Core.core.Event
+import com.vitorpamplona.quartz.nip04Dm.messages.EncryptedDmEvent
+import com.vitorpamplona.quartz.nip10Notes.TextNoteEvent
+import com.vitorpamplona.quartz.nip17Dm.files.ChatMessageEncryptedFileHeaderEvent
+import com.vitorpamplona.quartz.nip17Dm.messages.ChatMessageEvent
+import com.vitorpamplona.quartz.nip18Reposts.GenericRepostEvent
+import com.vitorpamplona.quartz.nip18Reposts.RepostEvent
+import com.vitorpamplona.quartz.nip22Comments.CommentEvent
+import com.vitorpamplona.quartz.nip25Reactions.ReactionEvent
+import com.vitorpamplona.quartz.nip28PublicChat.message.ChannelMessageEvent
+import com.vitorpamplona.quartz.nip57Zaps.ZapReceiptEvent
+import com.vitorpamplona.quartz.nip59Giftwrap.wraps.GiftWrapEvent
+import com.vitorpamplona.quartz.nip61Nutzaps.nutzap.NutzapEvent
+import com.vitorpamplona.quartz.nipBCOnchainZaps.zap.OnchainZapEvent
+import com.vitorpamplona.quartz.utils.Log
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * Subscribes to [DesktopLocalCache]'s new-event stream and fires OS toasts
+ * through [NotificationDispatcher] for events that pass the shared
+ * `tagsAnEventForUser` semantic gate + a lightweight suppression pipeline
+ * (master toggle, per-kind toggle, DND, window focus, cold-boot,
+ * per-event 30-second dedupe) + [isAcceptable], which holds the
+ * Notifications tab's top-nav filter.
+ *
+ * Runs one collector for the app's lifetime, scoped to [scope]. Cancel
+ * the scope to stop.
+ */
+private const val TAG = "AutoDispatch"
+
+/** How long a notification waits for its shared text before it goes out with the generic line. */
+private const val COMPOSE_TIMEOUT_MS = 5_000L
+
+class DesktopNotificationAutoDispatcher(
+    private val dispatcher: NotificationDispatcher,
+    private val settings: NotificationSettings,
+    private val myPubKeyHex: String,
+    /** New events, from whichever cache the window runs on. */
+    private val eventStream: ICacheEventStream,
+    /** The author of a cached event, to tell a reply to the user's note from one to someone else's. */
+    private val authorOf: (eventId: String) -> String?,
+    /** The name to show for a pubkey, when its profile is cached. */
+    private val displayNameOf: (pubKey: String) -> String?,
+    /**
+     * The title and body Android would show for [Event], from the shared composers, or null for
+     * a kind they don't cover. Used only when the user allows content previews. The legacy app
+     * passes none and keeps the generic lines.
+     */
+    private val compose: suspend (Event) -> NotificationMessage? = { null },
+    /**
+     * False for a note the user shouldn't hear about: its author is muted, blocked or reported,
+     * or the Notifications tab's top-nav filter (Curated, All Follows, a list...) would hide it.
+     */
+    private val isAcceptable: (Note) -> Boolean = { true },
+    private val isWindowFocused: StateFlow<Boolean>,
+    private val sessionStartSec: Long,
+    private val scope: CoroutineScope,
+) {
+    private val recentFires = HashMap<String, Long>()
+
+    fun start(): Job =
+        scope.launch {
+            Log.d(TAG) { "Auto-dispatcher started (pubKey=${myPubKeyHex.take(8)}, sessionStart=$sessionStartSec)" }
+            eventStream.newEventBundles.collect { bundle ->
+                for (note in bundle) {
+                    tryDispatch(note)
+                }
+            }
+        }
+
+    // Runs for every event that reaches the cache, so nothing is built unless debug logging is on.
+    private inline fun logSkip(
+        eventId: String,
+        kindLabel: String,
+        reason: () -> String,
+    ) {
+        Log.d(TAG) { "SKIP kind=$kindLabel id=${eventId.take(8)} reason=${reason()}" }
+    }
+
+    private fun tryDispatch(note: Note) {
+        val event = note.event ?: return
+        val eid = event.id
+        // Fast-path rejections — cheapest first.
+        if (event.kind !in NotificationKinds.SUBSCRIPTION_KINDS) {
+            // Skip logging: most events aren't notification kinds and would spam.
+            return
+        }
+
+        val kind = notifKindFor(event)
+        if (kind == null) {
+            logSkip(eid, "kind=${event.kind}") { "unmapped-kind" }
+            return
+        }
+
+        if (!settings.enabled.value) {
+            logSkip(eid, kind.name) { "master-off" }
+            return
+        }
+        if (!settings.kinds.value.enabledFor(kind)) {
+            logSkip(eid, kind.name) { "kind-toggle-off" }
+            return
+        }
+
+        val now = nowEpochSeconds()
+        if (settings.dnd.value.isActive(now)) {
+            logSkip(eid, kind.name) { "dnd-active" }
+            return
+        }
+        if (isWindowFocused.value) {
+            logSkip(eid, kind.name) { "window-focused" }
+            return
+        }
+
+        if (event.createdAt < sessionStartSec) {
+            logSkip(eid, kind.name) { "pre-session (created=${event.createdAt} < start=$sessionStartSec)" }
+            return
+        }
+        if ((now - event.createdAt) > 30) {
+            logSkip(eid, kind.name) { "stale (${now - event.createdAt}s old)" }
+            return
+        }
+
+        val perm = dispatcher.permission.value
+        if (perm != PermissionState.Granted && perm != PermissionState.NotApplicable) {
+            logSkip(eid, kind.name) { "permission=$perm" }
+            return
+        }
+
+        val accepts =
+            NotificationKinds.tagsAnEventForUser(
+                event = event,
+                myPubKeyHex = myPubKeyHex,
+                isTargetAuthoredByMe = { targetId -> authorOf(targetId) == myPubKeyHex },
+            )
+        if (!accepts) {
+            logSkip(eid, kind.name) { "not-tagged-for-user (author=${event.pubKey.take(8)})" }
+            return
+        }
+        if (!isAcceptable(note)) {
+            logSkip(eid, kind.name) { "not-acceptable (author=${event.pubKey.take(8)})" }
+            return
+        }
+
+        val dedupeKey = kind.name + "|" + event.id
+        val last = recentFires[dedupeKey]
+        if (last != null && (now - last) < 30) {
+            logSkip(eid, kind.name) { "deduped (${now - last}s ago)" }
+            return
+        }
+        recentFires[dedupeKey] = now
+        recentFires.entries.removeAll { now - it.value > 300 }
+
+        scope.launch {
+            try {
+                val spec = buildSpec(event, kind)
+                val result = dispatcher.send(spec)
+                Log.d(TAG) { "FIRED kind=$kind id=${eid.take(8)} result=$result" }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.w(TAG, "FAILED kind=$kind id=${eid.take(8)}", t)
+            }
+        }
+    }
+
+    /**
+     * The shared title and body, or null to fall back to the generic line. A composer may decrypt
+     * through a remote signer, so it gets [COMPOSE_TIMEOUT_MS] and any failure is just a fallback.
+     */
+    private suspend fun composeOrNull(event: Event): NotificationMessage? =
+        try {
+            withTimeoutOrNull(COMPOSE_TIMEOUT_MS) { compose(event) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not compose a notification for ${event.id.take(8)}", e)
+            null
+        }
+
+    private fun notifKindFor(event: Event): NotifKind? =
+        when (event) {
+            is ReactionEvent -> NotifKind.REACTION
+            is RepostEvent, is GenericRepostEvent -> NotifKind.REPOST
+            is ZapReceiptEvent, is NutzapEvent, is OnchainZapEvent -> NotifKind.ZAP
+            is TextNoteEvent -> if (event.isNewThread()) NotifKind.MENTION else NotifKind.REPLY
+            is CommentEvent -> NotifKind.REPLY
+            is ChannelMessageEvent -> NotifKind.MENTION
+            is EncryptedDmEvent,
+            is ChatMessageEvent,
+            is GiftWrapEvent,
+            is ChatMessageEncryptedFileHeaderEvent,
+            -> NotifKind.DM
+            else -> null
+        }
+
+    private suspend fun buildSpec(
+        event: Event,
+        kind: NotifKind,
+    ): NotificationSpec {
+        val effectivePubKey =
+            when (event) {
+                is ZapReceiptEvent -> event.zapRequest?.pubKey ?: event.pubKey
+                else -> event.pubKey
+            }
+        val displayName = displayNameOf(effectivePubKey) ?: loadStringRes(Res.string.desktop_notification_someone)
+
+        // With previews on, show what Android shows; DMs and replies keep the generic line
+        // (the DM pipeline isn't decrypted here and the reply composer is Android's).
+        val composed =
+            if (settings.previewInToast.value && kind != NotifKind.DM && kind != NotifKind.REPLY) {
+                composeOrNull(event)
+            } else {
+                null
+            }
+
+        val title =
+            composed?.let { sanitizeForToast(it.title, maxLen = 120) } ?: when (kind) {
+                NotifKind.ZAP -> {
+                    val sats = (event as? ZapReceiptEvent)?.amount?.let { (it.toLong() / 1000).toString() }
+                    if (sats != null) {
+                        loadStringRes(Res.string.desktop_notification_zap_amount, displayName, sats)
+                    } else {
+                        loadStringRes(Res.string.desktop_notification_zap, displayName)
+                    }
+                }
+
+                NotifKind.DM -> loadStringRes(Res.string.desktop_notification_dm)
+                NotifKind.REPLY -> loadStringRes(Res.string.desktop_notification_reply, displayName)
+                NotifKind.MENTION -> loadStringRes(Res.string.desktop_notification_mention, displayName)
+                NotifKind.REPOST -> loadStringRes(Res.string.desktop_notification_repost, displayName)
+                NotifKind.REACTION -> loadStringRes(Res.string.desktop_notification_reaction, displayName)
+                NotifKind.FOLLOW -> loadStringRes(Res.string.desktop_notification_follow, displayName)
+                // Posted by DesktopCalendarReminders, never classified from an event here.
+                NotifKind.CALENDAR -> loadStringRes(Res.string.calendar_reminder_default_title)
+            }
+
+        // Never leak DM ciphertext into the body — decryption pipeline
+        // isn't wired yet.
+        val body =
+            when {
+                kind == NotifKind.DM -> ""
+                !settings.previewInToast.value -> ""
+                composed != null -> sanitizeForToast(composed.body, maxLen = 120)
+                else -> sanitizeForToast(event.content, maxLen = 120)
+            }
+
+        return NotificationSpec(
+            title = title,
+            body = body,
+            kind = kind,
+            threadId = event.id,
+            deepLinkNoteId = event.id,
+        )
+    }
+}
