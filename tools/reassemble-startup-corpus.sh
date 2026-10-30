@@ -8,6 +8,15 @@ OUTPUT="$RESOURCE_DIR/nostr_vitor_startup_data.json.gz"
 TEMP_OUTPUT="$OUTPUT.tmp.$$"
 EXPECTED_SHA256="dbb75932a07ceef18d4904c4e9e2010dd2c62bafdd394b44285a5f5258c96ba8"
 
+if [[ -f "$OUTPUT" ]]; then
+    if printf '%s  %s\n' "$EXPECTED_SHA256" "$OUTPUT" | sha256sum --check --status; then
+        printf 'Corpus já existe e foi verificado: %s\n' "$OUTPUT"
+        exit 0
+    fi
+    echo "O corpus existente falhou na verificação SHA-256." >&2
+    exit 1
+fi
+
 trap 'rm -f "$TEMP_OUTPUT"' EXIT
 shopt -s nullglob
 PARTS=("$PARTS_DIR"/part-[0-9][0-9][0-9])

@@ -197,3 +197,7 @@ benchmark/src/main/jniLibs/
 # Cargo build artifacts for the cross-stack interop sidecars at
 # nestsClient/tests/hang-interop/. Cargo.lock is committed (binary workspace).
 /nestsClient/tests/hang-interop/target/
+
+# Reassembled benchmark fixture; the verified segments are tracked instead.
+/benchmark/src/androidTest/resources/nostr_vitor_startup_data.json.gz
+/benchmark/src/androidTest/resources/nostr_vitor_startup_data.json.gz.tmp.*
