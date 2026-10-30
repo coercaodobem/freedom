@@ -90,7 +90,7 @@ for (const action of ['actions/checkout', 'actions/configure-pages', 'actions/up
   assert.ok(pagesWorkflow.includes(action), `Pages workflow includes ${action}`);
 }
 assert.equal([...pagesWorkflow.matchAll(/uses:\s*[\w-]+\/[\w-]+@[0-9a-f]{40}/g)].length, 4, 'workflow actions are pinned to commit SHAs');
-const pagesBase = new URL('https://gymoo.github.io/freedom/');
+const pagesBase = new URL('https://coercaodobem.github.io/freedom/');
 const shellMatch = sw.match(/const SHELL = \[(.*?)\];/s);
 assert.ok(shellMatch, 'service worker declares its offline shell');
 const shellPaths = [...shellMatch[1].matchAll(/'([^']+)'/g)].map(match => match[1]);

@@ -1,0 +1,120 @@
+{
+  "checked_at": "2026-10-30T21:28:51.631798+00:00",
+  "source_commit": "e525f3028391cea6133fe7982b4e342ee576f449",
+  "workflow_run": 41130981007,
+  "base_url": "https://coercaodobem.github.io/freedom/",
+  "files": [
+    {
+      "path": "about.html",
+      "status": 200,
+      "bytes": 3542,
+      "sha256": "51be1d200d93ad441d08d91ac6f6bb98794f05f0a8dc143f0137f65ee6ebf2ab",
+      "matches_source": true
+    },
+    {
+      "path": "app.js",
+      "status": 200,
+      "bytes": 52530,
+      "sha256": "f12074e61043ea6d336c6ff095e8cb26013a06903615821137b0dd85fa4d4b6f",
+      "matches_source": true
+    },
+    {
+      "path": "assets/icon.svg",
+      "status": 200,
+      "bytes": 237,
+      "sha256": "ea3dbd64007a039697a968e9a99ce1cec128a5b497638be4e413eaa875cead27",
+      "matches_source": true
+    },
+    {
+      "path": "campaigns.js",
+      "status": 200,
+      "bytes": 6122,
+      "sha256": "f9aab0670440b84da888bea220c9e7877a16b7666e195046d61c8d468ddd8aaf",
+      "matches_source": true
+    },
+    {
+      "path": "forwarding.js",
+      "status": 200,
+      "bytes": 3138,
+      "sha256": "97bf7408017894de916fee5319f60db0f748ca74051d6e0d32bbbed360bbf43b",
+      "matches_source": true
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "bytes": 16657,
+      "sha256": "d8db5f03e0e8ad02538b65f2eebf9c1b3666d5d97d4bc9c27a62a75eadea26ac",
+      "matches_source": true
+    },
+    {
+      "path": "manifest.webmanifest",
+      "status": 200,
+      "bytes": 390,
+      "sha256": "613378133709c61a2db110403a6dd805e79f5c6fdfdb45a2b2608f6bd208b386",
+      "matches_source": true
+    },
+    {
+      "path": "marketplace.js",
+      "status": 200,
+      "bytes": 4590,
+      "sha256": "8315e743a76e8f71a96055f93669abf1e14c4ecf19cb87ceaa8281d8bf7d89e4",
+      "matches_source": true
+    },
+    {
+      "path": "nano.js",
+      "status": 200,
+      "bytes": 1208,
+      "sha256": "3415743cbe1edeb0e42836affa0b439941471756c60392d00f0c0d7a8b0dbcc2",
+      "matches_source": true
+    },
+    {
+      "path": "routing.js",
+      "status": 200,
+      "bytes": 1701,
+      "sha256": "609687545c18f5f97d4bba02e031c0221f3b7cdfe3f3e587095ea0bb7943d86a",
+      "matches_source": true
+    },
+    {
+      "path": "styles.css",
+      "status": 200,
+      "bytes": 14333,
+      "sha256": "dd3e68dbcb0832485982e4d2fca585ff59ba32b5e4fff90aaea72f0b40a6aea8",
+      "matches_source": true
+    },
+    {
+      "path": "sw.js",
+      "status": 200,
+      "bytes": 1166,
+      "sha256": "51dcb22783f343c6e037b310664e2f063eaf98b9baf0fd76a709430067738ef2",
+      "matches_source": true
+    },
+    {
+      "path": "vault.js",
+      "status": 200,
+      "bytes": 3508,
+      "sha256": "19b7093b6baa88c03c34a10d6190de02b142c3a001735b4ae147fe6edd8af6f8",
+      "matches_source": true
+    },
+    {
+      "path": "vendor/README.md",
+      "status": 200,
+      "bytes": 844,
+      "sha256": "7b62043b0d04c6574fe90291389ca44adfd1dfa01cc180b64ae12631f7aa243d",
+      "matches_source": true
+    },
+    {
+      "path": "vendor/nostr-tools-2.25.2.bundle.js",
+      "status": 200,
+      "bytes": 251980,
+      "sha256": "a7c4846fde84a0d6ce7596f3fcfc88435d29fdcd616887205ab97f9a16bc6407",
+      "matches_source": true
+    },
+    {
+      "path": "vendor/nostr-tools-LICENSE",
+      "status": 200,
+      "bytes": 1210,
+      "sha256": "f0510d3b9d1223c45e8fdd2b49270ec8734fff491c7f7d1b948ee70162e1ceff",
+      "matches_source": true
+    }
+  ]
+}

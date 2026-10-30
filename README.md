@@ -6,6 +6,8 @@ Esta branch de MVP parte do commit upstream [948135f](https://github.com/vitorpa
 
 ## Executar
 
+App publicado: [coercaodobem.github.io/freedom](https://coercaodobem.github.io/freedom/).
+
 Sirva a PWA localmente:
 
 ```bash

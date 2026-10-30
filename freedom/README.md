@@ -14,7 +14,9 @@ A opção **Ponte entre relays** encaminha eventos públicos assinados entre os 
 
 ## Publicar no GitHub Pages
 
-O workflow `.github/workflows/liberdade-pages.yml` publica somente `freedom/web` quando há push à branch `modelo-mvp`. O destino definido é o repositório público `Gymoo/freedom`; a branch atual ainda é local, portanto a URL `https://gymoo.github.io/freedom/` só existirá depois da criação do repositório, do envio da branch e da habilitação de Pages com origem **GitHub Actions**. O workflow usa actions fixadas por commit SHA e não altera a configuração do repositório.
+O app está publicado em [coercaodobem.github.io/freedom](https://coercaodobem.github.io/freedom/), a partir do repositório público `coercaodobem/freedom`. O workflow `.github/workflows/liberdade-pages.yml` publica somente `freedom/web` quando esses arquivos ou o próprio workflow mudam na branch `modelo-mvp`; também aceita execução manual. Pages usa a origem **GitHub Actions**, e o ambiente `github-pages` permite a branch `modelo-mvp`. O workflow usa actions fixadas por commit SHA e não altera a configuração do repositório.
+
+A publicação de 2026-10-30 foi validada pelo workflow [41130981007](https://github.com/coercaodobem/freedom/actions/runs/41130981007), pela abertura da tela inicial no navegador e pela comparação SHA-256 dos 16 arquivos públicos com o commit `e525f3028391cea6133fe7982b4e342ee576f449`. Consulte o [registro de validação](docs/evidence/pages-2026-10-30.json). Isso não encerra os demais gates do plano de testes.
 
 ## Iniciar um relay no Ubuntu
 
