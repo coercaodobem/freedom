@@ -1,0 +1,10 @@
+Command: node property/tests/native-relay-integration.mjs
+Node: v22.22.1
+Java: 25.0.4.1
+Exit code: 1
+Result: BLOCKED
+Relay bind: 127.0.0.1:17457
+Failure: java.net.SocketException: Operation not permitted while binding the loopback listener.
+Cleanup: verified no relay child process and no temporary test directory remained.
+Network: no public endpoint configured; no public TCP probe or DNS query sent.
+Retry policy: not retried under the profile with unrestricted default routes.
