@@ -6,6 +6,8 @@ Uma inspeção estática encontrou que os dois relays públicos eram carregados 
 
 A inspeção visual desta revisão também não ocorreu: a política do navegador recusou a abertura do pacote por file:// e permite apenas http/https. Nenhuma rota alternativa foi tentada.
 
+O inventário de property/docs/pagamentos.md, property/web/campaigns.js e do pacote de relay confirma que existe apenas parsing e seleção local de campanhas; não existe engine de aceite do node nem adaptador de pagamento. Pela regra explícita do plano, G07-01 e G07-03 falham, assim como a cobertura de adaptadores exigida por G08-01. O restante de G07/G08 está bloqueado por essa ausência e pelos daemons de cadeias privadas que não existem neste host.
+
 G00-02 continua BLOCKED, G00-04 continua sem harness de interrupção, e G01-02 permanece BLOCKED pela falha de bind do launcher. Nenhum caso dependente foi aprovado. Nenhuma sonda pública TCP/DNS foi enviada. O executor solicitado é Luna Max; esta execução foi feita por Codex GPT-6.
 
 ## Reprodução

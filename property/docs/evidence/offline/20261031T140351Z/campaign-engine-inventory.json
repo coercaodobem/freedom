@@ -1,0 +1,45 @@
+{
+  "scope": [
+    "property/web/campaigns.js",
+    "property/web/about.html",
+    "property/relay",
+    "property/docs/pagamentos.md"
+  ],
+  "findings": [
+    {
+      "path": "property/web/campaigns.js",
+      "observed": "Client-side signed-campaign parsing, selection, local exposure tracking and local block list; no node acceptance/payment state machine."
+    },
+    {
+      "path": "property/docs/pagamentos.md",
+      "line": 7,
+      "observed": "Documentation states that wallet, checkout, collection, blockchain confirmation and automatic refund are absent."
+    },
+    {
+      "path": "property/docs/pagamentos.md",
+      "lines": "36-50",
+      "observed": "Campaign engine and BTC/Nano/Monero payment adapters are specified as future work."
+    },
+    {
+      "path": "property/web/about.html",
+      "line": 34,
+      "observed": "Product disclosure states that campaign acceptance, charging and refunds are not implemented."
+    },
+    {
+      "path": "property/tests/campaigns-smoke.mjs",
+      "observed": "Tests signature/payload validation, currency atomic units, local selection/blocking and exposure limits; no ledger or node acceptance engine."
+    },
+    {
+      "path": "property/docs/evidence/offline/20261031T134844Z/manifest.json",
+      "observed": "Bitcoin Core, Monero node/wallet RPC, Nano node and Android SDK/emulator are unavailable in this host."
+    }
+  ],
+  "case_classification": {
+    "G07-01": "FAIL: required node campaign engine is absent; this is an explicit failure condition in the plan.",
+    "G07-03": "FAIL: there is no real campaign state machine to test with a ledger simulator.",
+    "G08-01": "FAIL: real BTC/XMR/XNO payment adapters are absent.",
+    "G08-02_to_G08-07": "BLOCKED: payment adapters and required local chain/wallet daemons are unavailable."
+  },
+  "internet_used": false,
+  "public_network_probes_sent": false
+}

@@ -35,20 +35,20 @@
 {"case":"G06-03","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
 {"case":"G06-04","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
 {"case":"G06-05","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-01","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-02","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-03","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-04","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-05","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-06","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G07-07","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-01","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-02","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-03","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-04","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-05","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-06","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
-{"case":"G08-07","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
+{"case":"G07-01","status":"FAIL","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"The required node-side campaign validation/acceptance engine is absent; the plan explicitly makes this a failure."}
+{"case":"G07-02","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"No real acceptance engine exists to bind and persist an accepted campaign."}
+{"case":"G07-03","status":"FAIL","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"There is no real campaign state machine to exercise with a deterministic ledger simulator."}
+{"case":"G07-04","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"Crash/replay/idempotency scenarios require the missing real campaign state machine."}
+{"case":"G07-05","status":"BLOCKED","gate_eligible":false,"evidence":[],"reason":"UI campaign opt-in, sponsorship labeling and node blocking were not inspected because the browser refused the available local package URL."}
+{"case":"G07-06","status":"BLOCKED","gate_eligible":false,"evidence":[],"reason":"Browser/network privacy capture was not possible under the available browser and isolation policies."}
+{"case":"G07-07","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"Node-specific policy switching requires the missing campaign engine and two independent node instances."}
+{"case":"G08-01","status":"FAIL","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"Real BTC/XMR/XNO payment adapters are absent; current code only represents atomic amounts and campaign claims."}
+{"case":"G08-02","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"Bitcoin adapter and local Bitcoin Core/regtest binary are unavailable."}
+{"case":"G08-03","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"Monero adapter, node and wallet RPC are unavailable."}
+{"case":"G08-04","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"Nano adapter and local Nano node/test network are unavailable."}
+{"case":"G08-05","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"No adapters, local ledgers or refund engine are available."}
+{"case":"G08-06","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"No ledger adapters exist to reconcile actual balances, pending amounts, fees or confirmations."}
+{"case":"G08-07","status":"BLOCKED","gate_eligible":false,"evidence":["campaign-engine-inventory.json"],"reason":"No local RPC adapters exist; daemon binaries are unavailable. No production credentials or funds were used."}
 {"case":"G09-01","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
 {"case":"G09-02","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
 {"case":"G09-03","status":"NOT_RUN","gate_eligible":false,"evidence":[],"reason":"Prerequisite gates are not approved; this case was not run in this checkpoint."}
