@@ -1,6 +1,6 @@
-# Roadmap do Liberdade
+# Roadmap do Property
 
-Atualizado em 2026-10-30. Este mapa orienta contribuições; não é promessa de prazo ou de funcionalidades concluídas. A branch de trabalho é `modelo-mvp`. Os critérios detalhados estão no [plano central](freedom/docs/plano-central.md) e no [plano de testes](freedom/docs/plano-de-testes-central.md).
+Atualizado em 2026-10-31. Este mapa orienta contribuições; não é promessa de prazo ou de funcionalidades concluídas. A branch de trabalho é `modelo-mvp`. Os critérios detalhados estão no [plano central](property/docs/plano-central.md) e no [plano de testes](property/docs/plano-de-testes-central.md).
 
 ## Base disponível para testar
 
@@ -25,15 +25,16 @@ Consulte os resultados registrados; a presença de código não comprova todos o
 
 ## Funcionalidades que exigem implementação e revisão
 
-- Marketplace completo e checkout.
-- Engine local de campanhas: oferta, aceite, endereço exclusivo, confirmação XNO/raw, expiração e reembolso idempotente.
-- Hangout integrado e validado para o Liberdade.
+- Marketplace completo e checkout XMR/XNO, com taxas, confirmação e reembolso específicos de cada moeda.
+- Relay empacotado para Windows, macOS e outras arquiteturas Linux; avaliar solução nativa Android/iOS sem root e sem exigir tela acesa.
+- Engine local de campanhas: oferta, aceite, endereço exclusivo, confirmação XMR/XNO por adaptadores independentes, expiração e reembolso idempotente.
+- Hangout integrado e validado para o Property.
 - Solução de plataforma para colaboração móvel contínua; uma PWA não garante execução permanente com a tela apagada.
 
 Mudanças em pagamentos, chaves e protocolos precisam de desenho discutido antes da implementação. Não há prazos de lançamento definidos para essas frentes.
 
 ## Por onde começar a contribuir
 
-Documentar um fluxo de primeiro uso com uma identidade descartável, relatar um problema de acessibilidade ou registrar um teste de instalação PWA são boas contribuições iniciais. Veja as [issues abertas](https://github.com/coercaodobem/freedom/issues), procure `good first issue` e `help wanted`, ou [proponha uma tarefa](https://github.com/coercaodobem/freedom/issues/new/choose). Evite duplicar uma discussão existente e registre ambiente, passos e resultado.
+Documentar um fluxo de primeiro uso com uma identidade descartável, relatar um problema de acessibilidade ou registrar um teste de instalação PWA são boas contribuições iniciais. Veja as [issues abertas](https://github.com/coercaodobem/property/issues), procure `good first issue` e `help wanted`, ou [proponha uma tarefa](https://github.com/coercaodobem/property/issues/new/choose). Evite duplicar uma discussão existente e registre ambiente, passos e resultado.
 
 O [guia de contribuição](CONTRIBUTING.md) explica como preparar um fork, validar e abrir um PR. Nenhuma contribuição depende de bounty ou pagamento.

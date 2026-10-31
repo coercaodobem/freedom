@@ -1,6 +1,6 @@
 ---
 name: Relatar um problema
-about: Registre um bug do Liberdade com passos reproduzíveis.
+about: Registre um bug do Property com passos reproduzíveis.
 title: "[BUG] "
 labels: bug
 assignees: ''

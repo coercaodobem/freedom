@@ -1,6 +1,6 @@
 ## Problema e resultado
 
-<!-- Explique o problema e como o comportamento fica com esta alteração. Relacione uma issue do Liberdade, se houver. -->
+<!-- Explique o problema e como o comportamento fica com esta alteração. Relacione uma issue do Property, se houver. -->
 
 ## Área alterada
 

@@ -1,10 +1,10 @@
-# Contexto do Liberdade
+# Contexto do Property
 
-Este repositório é `coercaodobem/freedom`, uma adaptação independente do Amethyst. A branch padrão é `modelo-mvp`. Leia [CONTRIBUTING.md](CONTRIBUTING.md), [CONTRIBUTING-WITH-AI.md](CONTRIBUTING-WITH-AI.md) e [ROADMAP.md](ROADMAP.md) para o fluxo atual de contribuição.
+Este repositório é `coercaodobem/property`, uma adaptação independente do Amethyst. A branch padrão é `modelo-mvp`. Leia [CONTRIBUTING.md](CONTRIBUTING.md), [CONTRIBUTING-WITH-AI.md](CONTRIBUTING-WITH-AI.md) e [ROADMAP.md](ROADMAP.md) para o fluxo atual de contribuição.
 
-O produto Liberdade fica em `freedom/web`, `freedom/relay`, `freedom/tests` e `freedom/docs`. Para mudanças somente web ou documentais, use a validação correspondente desse produto; compilar todos os alvos Kotlin não é requisito para essas mudanças. A suíte local é `bash freedom/tests/run-smoke.sh` com Node.js 22 ou superior. UI alterada exige inspeção no navegador; não declare teste de dispositivo sem evidência.
+O produto Property fica em `property/web`, `property/relay`, `property/tests` e `property/docs`. Para mudanças somente web ou documentais, use a validação correspondente desse produto; compilar todos os alvos Kotlin não é requisito para essas mudanças. A suíte local é `bash property/tests/run-smoke.sh` com Node.js 22 ou superior. UI alterada exige inspeção no navegador; não declare teste de dispositivo sem evidência.
 
-As orientações Amethyst abaixo descrevem os módulos upstream preservados e continuam aplicáveis quando esses módulos forem modificados. Instruções sobre propor trabalho no repositório original são referência upstream; contribuições do Liberdade vão para `coercaodobem/freedom:modelo-mvp`. Identifique remotos pela URL antes de qualquer envio. O mantenedor usa o remoto `freedom`; em forks, `origin` normalmente é o fork do contribuidor. Não envie alterações para Amethyst ou Gymoo como parte desta tarefa.
+As orientações Amethyst abaixo descrevem os módulos upstream preservados e continuam aplicáveis quando esses módulos forem modificados. Instruções sobre propor trabalho no repositório original são referência upstream; contribuições do Property vão para `coercaodobem/property:modelo-mvp`. Identifique remotos pela URL antes de qualquer envio. O mantenedor usa o remoto `property`; em forks, `origin` normalmente é o fork do contribuidor. Não envie alterações para Amethyst ou Gymoo como parte desta tarefa.
 
 Agentes não abrem PRs automaticamente: a pessoa responsável revisa e valida o diff antes de solicitar sua abertura. Não altere segredos, autoria ou licenças. Relatos de segurança seguem [SECURITY.md](SECURITY.md).
 

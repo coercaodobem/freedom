@@ -1,4 +1,4 @@
-# Contribuições ao Liberdade com assistência de IA
+# Contribuições ao Property com assistência de IA
 
 Este documento complementa [CONTRIBUTING.md](CONTRIBUTING.md). Assistentes são ferramentas; a pessoa que envia uma contribuição é responsável por entender, revisar e validar o resultado.
 
@@ -18,6 +18,6 @@ Agentes não devem abrir, publicar ou enviar PRs automaticamente. Entregue a bra
 - Mantenha correções pequenas e preserve autoria e licenças do código Amethyst reutilizado.
 - Discuta mudanças extensas em chaves, criptografia, NIPs, pagamentos ou distribuição com o mantenedor.
 - Não envie senhas, chaves privadas, tokens ou mensagens pessoais para ferramentas, issues ou logs.
-- Envie propostas do Liberdade para `coercaodobem/freedom`, na branch `modelo-mvp`.
+- Envie propostas do Property para `coercaodobem/property`, na branch `modelo-mvp`.
 
-Uma contribuição somente web ou documental deve ser validada pelo fluxo correspondente do Liberdade; não exige afirmar que o app Android foi instalado. As [regras upstream de IA](https://github.com/vitorpamplona/amethyst/blob/948135f7dbbae81d79a0b985282ce673397a7618/CONTRIBUTING-WITH-AI.md) são referência histórica para a base reaproveitada.
+Uma contribuição somente web ou documental deve ser validada pelo fluxo correspondente do Property; não exige afirmar que o app Android foi instalado. As [regras upstream de IA](https://github.com/vitorpamplona/amethyst/blob/948135f7dbbae81d79a0b985282ce673397a7618/CONTRIBUTING-WITH-AI.md) são referência histórica para a base reaproveitada.

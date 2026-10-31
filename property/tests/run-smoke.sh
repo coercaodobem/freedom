@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$TEST_DIR/../.." && pwd)"
+cd -- "$REPO_ROOT"
+
+for test_file in \
+  money-smoke.mjs \
+  nano-units-smoke.mjs \
+  marketplace-smoke.mjs \
+  campaigns-smoke.mjs \
+  protocol-smoke.mjs \
+  vault-smoke.mjs \
+  forwarding-smoke.mjs \
+  app-contract-smoke.mjs \
+  relay-migration-smoke.mjs \
+  relay-package-smoke.mjs
+do
+  printf '\n== %s ==\n' "$test_file"
+  node "$TEST_DIR/$test_file"
+done
+
+printf '\nPASS: suíte smoke local concluída.\n'

@@ -1,6 +1,6 @@
 ---
 name: Propor uma melhoria
-about: Sugira uma contribuição alinhada aos objetivos do Liberdade.
+about: Sugira uma contribuição alinhada aos objetivos do Property.
 title: "[IDEIA] "
 labels: enhancement
 assignees: ''
