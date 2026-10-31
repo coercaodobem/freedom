@@ -1,14 +1,14 @@
-# Liberdade
+# Property
 
-Comunicação pela internet com Nostr, mensagens privadas criptografadas e identidade controlada pela pessoa. O Liberdade é um projeto independente em desenvolvimento, com interface web instalável (PWA) e relay portátil para Ubuntu, construído a partir de código do Amethyst.
+Comunicação pela internet com Nostr, mensagens privadas criptografadas e identidade controlada pela pessoa. O Property é um projeto independente em desenvolvimento, com interface web instalável (PWA) e relay portátil para Windows, Mac, Linux, Android, IOS e Ubuntu, construído a partir de código do Amethyst.
 
 **[Abrir o app](https://coercaodobem.github.io/freedom/) · [Como contribuir](CONTRIBUTING.md) · [Roadmap](ROADMAP.md) · [Reportar um problema](https://github.com/coercaodobem/freedom/issues/new/choose)**
 
 ## O que queremos construir
 
-Uma interface simples para conversar, escolher relays e colaborar com uma rede de comunicação descentralizada por Wi-Fi ou rede móvel. A senha protege a chave aleatória criada no aparelho; não existe servidor central de login ou recuperação. O navegador se conecta diretamente aos relays escolhidos pelo usuário.
+Uma interface simples para conversar, postar e colaborar com uma rede de comunicação descentralizada por Wi-Fi ou rede móvel. A senha protege a chave aleatória criada no aparelho; não existe servidor central de login ou recuperação. O navegador se conecta diretamente aos relays escolhidos pelo usuário.
 
-PCs podem operar relays continuamente. A colaboração da PWA entre relays acontece enquanto o navegador está ativo. Android e iOS podem suspender uma PWA em segundo plano; manter um nó móvel permanentemente ativo ainda exige outra solução de plataforma.
+PCs podem operar relays continuamente. A colaboração da PWA entre relays acontece enquanto o navegador está ativo. Android e iOS podem suspender uma PWA em segundo plano; manter um nó móvel permanentemente ativo ainda exige outra solução de plataforma, a desenvolver.
 
 ## Estado atual: MVP em validação
 
@@ -19,7 +19,7 @@ PCs podem operar relays continuamente. A colaboração da PWA entre relays acont
 | Mensagens | Fluxos NIP-17 e listas de inbox relays kind 10050, com testes locais | Validação ampliada de interoperabilidade e redes reais |
 | Relay de PC | Geode portátil para Ubuntu Linux x86_64, runtime Java incluído | Evidência completa do ensaio contínuo de 24 horas |
 | Ponte voluntária | Encaminhamento limitado entre relays enquanto a PWA está ativa | Operação móvel contínua não é suportada pela PWA |
-| Marketplace e campanhas | Fluxos iniciais de ofertas e leitor opcional de campanhas assinadas | Checkout e engine de aceite, pagamento XNO e reembolso |
+| Marketplace e campanhas | Fluxos iniciais de ofertas e leitor opcional de campanhas assinadas | Checkout e engine de aceite, pagamento XMR, XNO e reembolso |
 | Hangout | Trabalho inicial herdado e previsto no plano | Integração completa e validação para o Liberdade |
 
 A publicação do app não significa que todo o plano foi concluído. Consulte o [plano de testes](freedom/docs/plano-de-testes-central.md) para resultados e limitações. Pagamentos e monetização automática de nodes não estão ativados nesta versão.
