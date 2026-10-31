@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Relatar uma vulnerabilidade em privado
+    url: https://github.com/coercaodobem/freedom/security/advisories/new
+    about: Use este canal para falhas de segurança; não exponha detalhes em uma issue pública.
+  - name: Guia de contribuição do Liberdade
+    url: https://github.com/coercaodobem/freedom/blob/modelo-mvp/CONTRIBUTING.md
+    about: Como executar, validar e propor alterações neste repositório.

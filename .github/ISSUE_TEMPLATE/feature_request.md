@@ -1,16 +1,21 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: "[FEATURE]"
-labels: ''
+name: Propor uma melhoria
+about: Sugira uma contribuição alinhada aos objetivos do Liberdade.
+title: "[IDEIA] "
+labels: enhancement
 assignees: ''
-
 ---
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+## Problema ou necessidade
 
-**Bounty (in Bitcoin sats, non-binding) offered for the implementation**
-The size of the bounty is proportional to how much this matters to you. If no bounty is offered,
-not even a small one, this feature will not be coded because it doesn't actually matter to you.
-We prioritize feature development by its bounty size compared to how much work is required to get it done.
+## Comportamento proposto
+
+## Relação com o roadmap
+
+Consulte ROADMAP.md e explique se a proposta trata de uma frente existente ou de uma necessidade nova.
+
+## Como verificar que ficou pronto
+
+## Alternativas e disposição para contribuir
+
+Descreva se pode ajudar com documentação, testes, design ou código. Propostas não dependem de bounty ou pagamento. Não inclua segredos nem dados pessoais.

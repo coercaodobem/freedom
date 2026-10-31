@@ -1,36 +1,30 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: "[BUG]"
-labels: ''
+name: Relatar um problema
+about: Registre um bug do Liberdade com passos reproduzíveis.
+title: "[BUG] "
+labels: bug
 assignees: ''
-
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## O que aconteceu
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## Passos para reproduzir
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+1.
+2.
+3.
 
-**Video and Screenshots**
-If applicable, add a video and/or screenshots to help explain your problem.
+## Resultado esperado
 
-**Device (please complete the following information):**
- - Phone Brand/Model [e.g. Pixel 7 Pro]:
- - Android Version [e.g. 34]:
- - App Version [e.g. v0.94.3]:
- - App Flavour [e.g. Google Play or FDroid]: 
- - Amber Version (if using it to sign):
+## Ambiente
 
-**Bounty (in Bitcoin sats, non-binding) offered for a solution**
-The size of the bounty is proportional to how much this matters to you. If no bounty is offered,
-not even a small one, this bug will not be worked on because it doesn't matter to you. We prioritize
-bug fixing to issues that have bounties, even small ones.
+- URL ou commit/branch:
+- Navegador e versão:
+- Sistema operacional e aparelho:
+- Para relay: arquitetura, comando e configuração relevante sem segredos:
+
+## Evidências e limites
+
+Inclua logs curtos ou capturas com dados sintéticos. Não envie senhas, chaves privadas, tokens, backups pessoais ou conversas reais. Vulnerabilidades devem usar o canal privado descrito em SECURITY.md.
+
+Relatos não exigem bounty ou pagamento.

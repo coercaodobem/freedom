@@ -1,329 +1,87 @@
-# Contributing to Amethyst
+# Contribuir com o Liberdade
 
-Thanks for your interest in improving Amethyst. This document captures the
-expectations, conventions, and review rules for code, documentation, and
-translation contributions across all modules in this repository (`amethyst/`,
-`desktopApp/`, `commons/`, `commonsUI/`, `cli/`, `nestsClient/`). The Quartz library has its own
-repo and its own contributing rules: [vitorpamplona/quartz](https://github.com/vitorpamplona/quartz).
+Obrigado pelo interesse. O projeto é mantido em [coercaodobem/freedom](https://github.com/coercaodobem/freedom), e a branch padrão e de desenvolvimento é **`modelo-mvp`**. Bugs, ideias e pull requests do Liberdade devem ser enviados aqui.
 
-By contributing, you agree to license your work under the MIT license. Any
-work contributed where you are not the original author must contain its
-license header with the original author(s) and source.
+O MVP segue em validação. Leia o [README](README.md), o [roadmap](ROADMAP.md) e o [plano de testes](freedom/docs/plano-de-testes-central.md) para distinguir funcionalidades disponíveis de propostas.
 
-- [Ways to contribute](#ways-to-contribute)
-- [Proof of testing (new / occasional contributors)](#proof-of-testing-new--occasional-contributors)
-- [Reporting bugs and requesting features](#reporting-bugs-and-requesting-features)
-- [Security issues](#security-issues)
-- [Development setup](#development-setup)
-- [Where code belongs](#where-code-belongs)
-- [Workflow](#workflow)
-- [Coding standards](#coding-standards)
-- [Tests](#tests)
-- [Interoperability tests](#interoperability-tests)
-- [Commits](#commits)
-- [Pull requests](#pull-requests)
-- [Translations](#translations)
-- [Releases](#releases)
+## Formas de ajudar
 
----
+- Relatar um problema com passos de reprodução e dados de ambiente.
+- Melhorar documentação, tradução da interface, acessibilidade e navegação móvel.
+- Executar testes e registrar resultados, inclusive limitações encontradas.
+- Propor correções ou funcionalidades pequenas e alinhadas ao roadmap.
 
-## Ways to contribute
+Não exigimos bounty, doação ou pagamento para receber propostas. Os labels `good first issue` e `help wanted`, quando usados em issues, indicam tarefas para colaboração; a ausência de um label não impede uma proposta. Converse em uma issue antes de iniciar mudanças extensas.
 
-- Fix bugs or implement features (see issues and the bounty notes in the
-  issue templates).
-- Improve documentation in `README.md`, `BUILDING.md`, `SECURITY.md`, the
-  per-module `plans/` folders, and the `.claude/` skill docs.
-- Add or improve translations on
-  [Crowdin](https://crowdin.com/project/amethyst-social).
-- Report bugs, suggest features, or open issues at
-  [github.com/vitorpamplona/amethyst/issues](https://github.com/vitorpamplona/amethyst/issues)
-  or the Nostr mirror at
-  [gitworkshop.dev/repo/amethyst](https://gitworkshop.dev/repo/amethyst).
-- Send patches over Nostr using
-  [GitStr](https://github.com/fiatjaf/gitstr) — see the address at the bottom
-  of the README.
+## Preparar um fork
 
-## Proof of testing (new / occasional contributors)
-
-We accept pull requests authored by humans and pull requests authored with
-help from AI coding assistants (Claude Code, Copilot, Cursor, Codex, etc.)
-under the same rules:
-
-- **You are the author of record.** You are responsible for understanding,
-  testing, and defending every line — including code an assistant wrote for
-  you. "The AI did it" is not a valid response to review feedback.
-- **No hallucinated APIs or imports.** Don't submit code that calls
-  functions, classes, or libraries that don't exist in this repo or its
-  declared dependencies. Build and run it before you push.
-- **No machine-translated locale files.** Translations go through Crowdin so
-  native speakers can review them.
-- **Disclose substantial AI involvement** with a one-line note in the PR
-  description. Courtesy, not a gate.
-
-If you are **not a regular contributor** to this repository — first PR, or
-sporadic enough that maintainers wouldn't recognize your handle — the PR
-description must include proof that you actually ran the change:
-
-- **Code/logic changes:** paste the test output, CLI command, or log lines
-  that show the new path executing. CI green is necessary but not
-  sufficient.
-- **UI changes** (`amethyst/`, `desktopApp/`, or `@Composable` code in
-  `commons/`): attach screenshots or a short recording from a real device or
-  emulator. See the PR template for the exact checklist (light + dark,
-  device / OS info, empty / loading / error states).
-- **Build / Gradle / packaging changes:** paste the `./gradlew` command and
-  the tail of its output.
-- **Translation-only PRs:** mention which locale and which strings you
-  touched; screenshots not required.
-
-Once you have an established track record, a short test plan is enough on
-subsequent PRs. Maintainers may still ask for screenshots on visual changes.
-
-If you can't run a particular target locally (e.g. no macOS, but your change
-affects the DMG build), say so explicitly. Honest "I couldn't test this on
-Windows" beats a silent guess.
-
-If you used an AI coding assistant for a substantial portion of the diff,
-also read [`CONTRIBUTING-WITH-AI.md`](CONTRIBUTING-WITH-AI.md). Its main
-rule: no PR may be opened until a human has reviewed the whole diff and
-tested the app by hand on a device. An agent must never open the PR itself.
-
-## Reporting bugs and requesting features
-
-Use the GitHub issue templates at
-[`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) rather than opening a
-blank issue — they exist so triage can route the report without a follow-up
-round trip.
-
-**Bug report (`[BUG]` title prefix):** describe the bug, give numbered repro
-steps from a fresh app launch, state expected behavior, attach video /
-screenshots for anything visual or timing-sensitive, list device info (phone
-brand/model, Android version, app version, flavour, Amber version if
-applicable), and include a bounty.
-
-**Feature request (`[FEATURE]` title prefix):** describe the user-facing
-outcome and include a bounty. Skip implementation suggestions unless they're
-load-bearing.
-
-### Bounties
-
-Maintainer time is allocated by bounty size. From the templates: *"If no
-bounty is offered, not even a small one, this bug will not be worked on
-because it doesn't matter to you."* Issues are prioritized by bounty ÷
-effort, even a few hundred sats outrank a zero-bounty issue, and bounties
-aren't refunded. If you can fix it yourself, just open the PR — bounties
-exist to move issues nobody is currently working on. Security issues do not
-need a bounty and should not be filed publicly; see
-[SECURITY.md](SECURITY.md).
-
-**A bounty is not, and will never be, a promise of payment.** Even if the
-issue's author likes your solution and it is approved and merged, the author
-can still decide, for any reason, whether to pay you or not. If you take on a
-bounty, you accept the risk of not being paid even after the work is done.
-
-## Security issues
-
-**Do not file security vulnerabilities as public GitHub issues.** Use
-[GitHub private vulnerability reporting](https://github.com/vitorpamplona/amethyst/security/advisories/new)
-instead. See [SECURITY.md](SECURITY.md) for scope, expected response times,
-and disclosure policy.
-
-## Development setup
-
-Prerequisites:
-
-1. **JDK 21+** (Zulu or Temurin recommended)
-2. **Android Studio** (for Android development)
-3. **Android 8.0+ phone or emulator** (for installing the Android app)
-4. **Xcode + iOS simulator** if you're touching iOS code
-5. **libsodium** for full local builds (`brew install libsodium` on macOS)
-
-Desktop packaging prerequisites (only if you're building installers) are
-listed in [BUILDING.md § Prerequisites](BUILDING.md#prerequisites).
-
-Clone and import:
+Faça um fork no GitHub. Substitua `SEU_USUARIO` pelo seu login:
 
 ```bash
-git clone https://github.com/vitorpamplona/amethyst.git
-cd amethyst
+git clone --branch modelo-mvp https://github.com/SEU_USUARIO/freedom.git
+cd freedom
+git remote add upstream https://github.com/coercaodobem/freedom.git
+git switch -c minha-contribuicao
 ```
 
-Common Gradle entry points:
+`origin` aponta para seu fork, e `upstream` aponta para o Liberdade. Use uma branch própria para cada contribuição. Preserve alterações locais ao atualizar sua cópia.
+
+## Executar e validar
+
+A PWA está em `freedom/web/` e não exige compilar Android. Com Python 3:
 
 ```bash
-./gradlew :desktopApp:run         # Run desktop app
-./gradlew :amethyst:installDebug  # Install Android debug build
-./gradlew -PquartzDir=../quartz build   # Build against a local Quartz checkout
-./gradlew build                   # Full build + tests
+python3 -m http.server 8080 --directory freedom/web
 ```
 
-## Where code belongs
-
-Modules:
-
-- Quartz — Nostr KMP library (protocol, crypto, models), in its own repo
-  ([vitorpamplona/quartz](https://github.com/vitorpamplona/quartz)) and on Maven Central. **No UI.**
-- `commons/` — Shared headless layer: models, ViewModels, flows, relay client. **No Compose UI** (the CLI depends on it).
-- `commonsUI/` — Shared Compose Multiplatform UI, icons, theme, Compose resources, on top of `commons`.
-- `nestsClient/` — Audio-rooms client (NIP-53) built on quic-kmp and
-  quartz. The pure-Kotlin QUIC v1 + HTTP/3 + WebTransport stack lives in
-  its own repo, [quic-kmp](https://github.com/vitorpamplona/quic-kmp), and comes from Maven Central.
-- `amethyst/` — Android app: Activity, layouts, navigation.
-- `desktopApp/` — Desktop JVM app: Window, sidebar, keyboard shortcuts.
-- `cli/` — `amy`, a non-interactive JVM CLI over `quartz` + `commons`.
-
-Per-module design docs live in `<module>/plans/YYYY-MM-DD-<slug>.md`. The
-global `docs/plans/` folder is frozen.
-
-Before writing a new class or composable, check whether it already exists.
-Most logic is already implemented somewhere — duplicating it is the #1 cause
-of PR churn. Place new code by purpose:
-
-| What you're adding | Goes in |
-|---|---|
-| Nostr event types, NIPs, tags, signing, crypto, Bech32 | [quartz](https://github.com/vitorpamplona/quartz) (its own repo) |
-| Shared ViewModels, StateFlows, relay subscriptions | `commons/commonMain/viewmodels/` or `commons/commonMain/` |
-| Shared Composables, icons, theme | `commonsUI/commonMain/` (same packages as `commons`) |
-| Android-only screen, navigation, system integration | `amethyst/` |
-| Desktop-only window, sidebar, menu bar, shortcut | `desktopApp/` |
-| `amy <verb>` subcommand (thin assembly only) | `cli/src/main/kotlin/.../cli/` |
-| QUIC / HTTP/3 / WebTransport protocol code | [quic-kmp](https://github.com/vitorpamplona/quic-kmp) (its own repo) |
-| MoQ session / audio-room logic | `nestsClient/` |
-
-Hard rules:
-
-- Quartz has **no UI**.
-- `cli/` has **no Nostr protocol or business logic** — it's a thin assembly
-  layer over `quartz` + `commons`. If your CLI command needs new behavior,
-  extract it into `commons/` first.
-- ViewModels belong in `commons/commonMain/`; shared composables in
-  `commonsUI/commonMain/`. Only screens (the Composable that wires layout +
-  navigation) stay in the platform module.
-- For platform-specific behavior in a shared file, use `expect`/`actual`.
-
-## Workflow
-
-1. **Survey first.** Search the codebase for existing implementations before
-   writing new code. The `AGENTS.md` file has a recommended set of
-   `grep` queries; running them routinely turns up the exact class you were
-   about to re-invent.
-2. **Open a small PR.** One feature or one fix per PR. Refactors that
-   support the change are fine; unrelated refactors are not.
-3. **Branch off `main`.**
-4. **Run tests + spotless locally** before pushing.
-5. **Open the PR** with a description that explains *why*, not just *what*.
-
-## Coding standards
-
-- Kotlin, formatted with Spotless. Always run `./gradlew spotlessApply`
-  before considering a task complete. CI runs `spotlessCheck` and will fail
-  on unformatted code.
-- Never use `--no-verify` to bypass pre-commit hooks. If a hook fails, fix
-  the cause.
-- Default to writing no comments. Add one only when the *why* is non-obvious
-  (a workaround, a subtle invariant, behavior that would surprise a
-  reader). Don't restate what the code does, and don't reference the
-  current task or callers — that belongs in the PR description.
-
-## Tests
+Abra `http://localhost:8080`. Com Node.js 22 ou superior, execute a suíte local:
 
 ```bash
-./gradlew test                 # Unit + KMP common tests, all modules
-./gradlew connectedAndroidTest # Android instrumented tests (needs device)
-./gradlew :commons:test        # Single module
+bash freedom/tests/run-smoke.sh
 ```
 
-Add tests when:
+Ela valida unidades Nano/raw, marketplace, campanhas, protocolo, cofre, ponte, contrato da PWA e pacote do relay, usando código e fixtures locais. A CI **Validar Liberdade** executa esse mesmo comando em pushes e pull requests para `modelo-mvp`. PRs de forks podem depender da aprovação de execução do mantenedor no GitHub.
 
-- You fix a bug — a regression test that fails before your fix and passes
-  after.
-- You add new protocol code in quartz — Nostr event parsing, NIP
-  implementations, and crypto paths should have unit coverage there.
-- You add anything to `commons/` with non-trivial state transitions.
+Para testar o relay no Ubuntu Linux x86_64:
 
-UI changes don't need automated UI tests, but they do need the screenshots
-described in the proof-of-testing section.
+```bash
+./freedom/relay/start.sh
+```
 
-## Interoperability tests
+Para integração entre dois relays isolados:
 
-Amethyst ships several cross-stack interop harnesses that drive our code
-against external reference implementations. They are **not run in CI** —
-they're slow, require Rust / bun / Docker / Chromium, and most PRs don't
-touch the code they cover. If your change *does* touch a covered area, you
-are expected to run the relevant suite locally and paste the result into
-the PR description. Reviewers may ask if you didn't.
+```bash
+bash freedom/tests/run-bridge-integration.sh 17450 17451
+```
 
-| Suite | Path | What it covers | When you must run it |
-|---|---|---|---|
-| **Marmot / MLS (Whitenoise)** | `cli/tests/marmot/` | NIP-EE MLS groups: KeyPackage publish, group create/invite/remove, admin promote/demote, leave, replay, KP rotation — Amethyst (or `amy`) ↔ `whitenoise-rs` Rust reference | Changes to MLS / Marmot code in `quartz/` or `commons/`, or to the Marmot UI / group-chat flow in `amethyst/` |
-| **NIP-17 DMs (amy ↔ amy)** | `cli/tests/dm/` | Text + file DM round-trip, strict kind:10050, `--allow-fallback` NIP-65 chain, `dm list --since` window slide | Changes to DM, gift-wrap (NIP-59), or NIP-17 code paths in `quartz/` or `commons/` |
-| **Audio rooms (manual)** | `cli/tests/nests/` | 47-test manual harness: Amethyst Android ↔ nostrnests.com reference web client. Host/listener flows, hand-raise, role promotion, kicks, schedule, reconnect, JWT refresh, PIP | Changes to NIP-53 audio rooms (`amethyst/` UI) or `nestsClient/` that affect host/listener UX |
-| **MoQ-lite hang-tier** | `nestsClient/tests/hang-interop/` | Rust `hang-listen` / `hang-publish` ↔ Amethyst Kotlin through a real `moq-relay` 0.10.x subprocess. Wire-byte capture, FFT-on-PCM, mute / hot-swap / packet-loss / late-join / 60s broadcast / multi-listener fan-out | Changes to `nestsClient/.../moq/lite/`, `nestsClient/.../audio/`, `MoqLite*Speaker.kt` / `*Listener.kt`, `ReconnectingNests*.kt`, or `quartz/.../nip53` |
-| **MoQ-lite browser-tier** | `nestsClient/tests/browser-interop/` | Headless Chromium with `@moq/lite` + `@moq/hang` via Playwright ↔ Amethyst Kotlin (forward + reverse). WebCodecs encode/decode, ALPN negotiation, browser-side reconnect | Same as hang-tier, plus any quic-kmp version bump (WebTransport, packet header protection, key updates, stream demux) |
+O ensaio contínuo é separado e dura 24 horas; execute-o quando a contribuição exigir essa validação, preservando o log e o resultado final:
 
-### Running them
+```bash
+node freedom/tests/relay-soak.mjs 86400 60 17447
+```
 
-Each suite has its own README; the non-obvious bits worth flagging up
-front:
+Para documentação, confira links e comandos alterados. Para UI, exercite o fluxo no navegador e informe tamanho de tela, navegador, resultado e capturas quando úteis. Use dados de teste e identidades descartáveis. Testes unitários não substituem a inspeção visual de uma tela alterada.
 
-- **MoQ-lite tiers** are opt-in via `-DnestsHangInterop=true` and
-  `-DnestsBrowserInterop=true` on `:nestsClient:jvmTest`. Cold first run is
-  ~10–13 min per tier; cached runs ~3–7 min.
-- **The QUIC interop-runner matrix** moved with the QUIC stack to
-  [quic-kmp](https://github.com/vitorpamplona/quic-kmp) (`quic/interop/` there).
-- **CLI suites** ([`cli/tests/README.md`](cli/tests/README.md)): every
-  relay-backed suite boots the embedded `amy serve` relay (geode) — no
-  external relay binary; only the Marmot suites additionally need `cargo`
-  for MDK's `wn`/`wnd`. The interactive Marmot variant prompts a human to
-  drive the Android UI.
+Ao modificar módulos Kotlin herdados, siga também [AGENTS.md](AGENTS.md), as instruções mais próximas do arquivo e [BUILDING.md](BUILDING.md). Formate Kotlin com `./gradlew spotlessApply` e execute os testes pertinentes ao módulo. Uma contribuição somente web ou documental não exige compilar todos os alvos Android/desktop.
 
-If a change is documentation-only, UI-only, build-script-only, or otherwise
-cannot affect wire bytes / decoded audio / MLS state / DM envelopes, skip
-the interop suites and say so in the PR description.
+## Enviar um pull request
 
-## Commits
+1. Faça commits focados, com mensagens como `fix:`, `feat:` ou `docs:`.
+2. Envie sua branch ao seu fork: `git push -u origin minha-contribuicao`.
+3. Abra o PR com base em **`coercaodobem/freedom:modelo-mvp`**.
+4. Explique o problema, o comportamento resultante e como validou. Declare o que não conseguiu testar.
+5. Aguarde revisão. Uma proposta pode precisar de ajustes antes de ser incorporada.
 
-- Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`,
-  `fix:`, `refactor:`, `docs:`, `chore:`, `test:`, etc.
-- One logical change per commit. Squashing during PR review is fine.
-- Keep subject lines under ~72 characters. Use the body to explain *why*
-  the change was made when it isn't obvious.
-- Branch names follow `feat/<scope>-<short-name>` or
-  `fix/<scope>-<short-name>` (e.g. `feat/desktop-sidebar-resize`,
-  `fix/android-notification-leak`).
+Não desative hooks nem use `--no-verify`. Mudanças em criptografia, armazenamento de chaves, interpretação de NIPs, pagamentos ou distribuição devem ser discutidas com o mantenedor antes de uma implementação extensa. Nunca exponha segredos, dados de usuários ou conversas reais para demonstrar um bug.
 
-## Pull requests
+## Uso de IA
 
-A good PR description has:
+Assistência de IA é aceita, com responsabilidade humana pela alteração. Leia [CONTRIBUTING-WITH-AI.md](CONTRIBUTING-WITH-AI.md); não declare testes ou revisão que não aconteceram.
 
-1. **Summary** — 1–3 sentences on what changed and why.
-2. **Test plan** — exactly what you ran, on what platform, with what
-   result. Include screenshots / recordings for UI changes (mandatory for
-   non-regular contributors; expected for everyone on visual changes).
+## Segurança e licença
 
-We aim to give first-pass feedback within a few days. PRs may sit longer if
-they're large, touch security-sensitive code, or arrive during a release
-window.
+Relate vulnerabilidades pelo [canal privado do Liberdade](SECURITY.md). Não abra uma issue pública com detalhes exploráveis.
 
-## Translations
+Ao contribuir, você licencia sua contribuição sob [MIT](LICENSE). Preserve os avisos e as licenças de qualquer código de terceiros. Dependências novas precisam ter origem e licença verificadas.
 
-- Submit translations via
-  [Crowdin](https://crowdin.com/project/amethyst-social), not as direct PRs
-  to `strings.xml`. Crowdin pushes are integrated through the `crowdin.yml`
-  workflow.
-- The `/find-missing-translations` skill can help reviewers spot
-  untranslated keys for a target locale.
-
-## Releases
-
-Release runbooks (Android AAB upload, desktop packaging on macOS / Windows /
-Linux, Homebrew cask, Winget manifest, Apple Developer signing, asset
-naming) live in [BUILDING.md § Release runbook](BUILDING.md#release-runbook)
-and [BUILDING.md § Bootstrap runbook](BUILDING.md#bootstrap-runbook-one-time).
-
-If your PR needs to be cut into a particular release, mention it in the PR
-description and the maintainers will coordinate.
-
----
-
-Thanks again for contributing.
+A documentação técnica original do Amethyst continua disponível no [commit de origem](https://github.com/vitorpamplona/amethyst/blob/948135f7dbbae81d79a0b985282ce673397a7618/CONTRIBUTING.md). Ela é uma referência para os módulos reaproveitados; o fluxo de contribuição do Liberdade é o descrito acima.
