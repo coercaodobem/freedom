@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "run_id": "property-offline-20261031T140351Z",
+  "started_utc": null,
+  "started_time_note": "Command start time was not captured by the executor.",
+  "checkpoint_utc": "2026-10-31T14:05:38Z",
+  "requested_executor": "Luna Max",
+  "actual_executor": "Codex GPT-6",
+  "repository": "https://github.com/coercaodobem/property",
+  "branch": "modelo-mvp",
+  "tested_commit": "1a47e2b328446696cb0db29a10953d052b615837",
+  "remote_head_verified": "1a47e2b328446696cb0db29a10953d052b615837",
+  "uncommitted_product_diff_sha256": "7a8a22bb9e82f76287883c700d3e58ec941046909625698eed64c0b218780704",
+  "previous_checkpoint": "property/docs/evidence/offline/20261031T135834Z",
+  "scope": "offline smoke regression and default relay behavior correction; no gate approval; PROPERTY_SCOPE_OFFLINE_PASS not achieved",
+  "host": {
+    "os": "Linux 7.0.0-38-generic x86_64",
+    "node": "v22.22.1",
+    "java": "25.0.4.1",
+    "browser_automation": "file URL inspection was refused by browser URL policy; no alternate loading path was attempted"
+  },
+  "test": {
+    "command": "bash property/tests/run-smoke.sh",
+    "exit_code": 0,
+    "suites_passed": 13,
+    "network_endpoints_configured": false
+  },
+  "change_under_test": "Fresh installs now start with an empty relay list. Public relay examples are loaded only by an explicit UI action and connect only after Save and connect."
+}

@@ -1,0 +1,12 @@
+{
+  "test": "13-suite local smoke regression",
+  "suite_processes": "Node.js test scripts and static source/package checks",
+  "network": "no relay or public endpoint configured by these smoke tests",
+  "runtime_relay": "not started in this checkpoint",
+  "browser": "not launched in this checkpoint",
+  "default_relay_behavior": {
+    "new_install_general_relays": [],
+    "public_examples": ["wss://relay.damus.io", "wss://nos.lol"],
+    "connection_requires": "explicit Save and connect action"
+  }
+}

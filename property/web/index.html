@@ -7,19 +7,19 @@
   <meta name="description" content="Property: comunicação Nostr com identidade local e relays escolhidos por você.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>Property</title>
-  <link rel="icon" href="./assets/icon.svg?v=property-v9" type="image/svg+xml">
-  <link rel="manifest" href="./manifest.webmanifest?v=property-v9">
-  <link rel="stylesheet" href="./styles.css?v=property-v9">
-  <script defer src="./vendor/nostr-tools-2.25.2.bundle.js?v=property-v9"></script>
-  <script defer src="./vault.js?v=property-v9"></script>
-  <script defer src="./routing.js?v=property-v9"></script>
-  <script defer src="./forwarding.js?v=property-v9"></script>
-  <script defer src="./nano.js?v=property-v9"></script>
-  <script defer src="./money.js?v=property-v9"></script>
-  <script defer src="./marketplace.js?v=property-v9"></script>
-  <script defer src="./campaigns.js?v=property-v9"></script>
-  <script defer src="./contact.js?v=property-v9"></script>
-  <script defer src="./app.js?v=property-v9"></script>
+  <link rel="icon" href="./assets/icon.svg?v=property-v10" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.webmanifest?v=property-v10">
+  <link rel="stylesheet" href="./styles.css?v=property-v10">
+  <script defer src="./vendor/nostr-tools-2.25.2.bundle.js?v=property-v10"></script>
+  <script defer src="./vault.js?v=property-v10"></script>
+  <script defer src="./routing.js?v=property-v10"></script>
+  <script defer src="./forwarding.js?v=property-v10"></script>
+  <script defer src="./nano.js?v=property-v10"></script>
+  <script defer src="./money.js?v=property-v10"></script>
+  <script defer src="./marketplace.js?v=property-v10"></script>
+  <script defer src="./campaigns.js?v=property-v10"></script>
+  <script defer src="./contact.js?v=property-v10"></script>
+  <script defer src="./app.js?v=property-v10"></script>
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -113,7 +113,7 @@
     </section>
   </div>
 
-  <dialog id="relay-dialog" class="dialog-card"><form method="dialog" class="dialog-head"><div><p class="eyebrow">CONEXÃO DIRETA</p><h2>Seus relays</h2></div><button class="icon-button" aria-label="Fechar">×</button></form><div class="dialog-body"><p class="muted">O app conecta diretamente a estes endereços. Use wss:// em produção. ws:// funciona apenas para testes locais. A lista NIP-17 é pública.</p><label class="field"><span>Relays gerais (um por linha)</span><textarea id="relay-input" rows="4" spellcheck="false"></textarea></label><label class="field"><span>Relays de recebimento NIP-17 (1 a 3 URLs)</span><textarea id="dm-relay-input" rows="3" spellcheck="false" placeholder="wss://relay.example"></textarea></label><div class="dialog-actions"><button id="save-relays" class="button primary" type="button">Salvar e conectar</button><button id="publish-inbox-list" class="button secondary" type="button">Publicar meus relays de mensagens (NIP-17)</button><button id="use-default-relays" class="button text" type="button">Restaurar lista inicial</button></div><p class="fine-print">A lista NIP-17 é pública. As mensagens só são publicadas nos relays de recebimento publicados por você e pela outra pessoa.</p><p id="relay-error" class="error" role="alert"></p></div></dialog>
+  <dialog id="relay-dialog" class="dialog-card"><form method="dialog" class="dialog-head"><div><p class="eyebrow">CONEXÃO DIRETA</p><h2>Seus relays</h2></div><button class="icon-button" aria-label="Fechar">×</button></form><div class="dialog-body"><p class="muted">Nenhum relay é configurado automaticamente. Escolha endereços e toque em “Salvar e conectar”. Use wss:// em produção; ws:// só funciona para testes locais. A lista NIP-17 é pública.</p><label class="field"><span>Relays gerais (um por linha)</span><textarea id="relay-input" rows="4" spellcheck="false"></textarea></label><label class="field"><span>Relays de recebimento NIP-17 (1 a 3 URLs)</span><textarea id="dm-relay-input" rows="3" spellcheck="false" placeholder="wss://relay.example"></textarea></label><div class="dialog-actions"><button id="save-relays" class="button primary" type="button">Salvar e conectar</button><button id="publish-inbox-list" class="button secondary" type="button">Publicar meus relays de mensagens (NIP-17)</button><button id="use-default-relays" class="button text" type="button">Carregar exemplos públicos</button></div><p class="fine-print">Os exemplos são dois relays públicos; preenchê-los não conecta. A conexão começa somente após salvar. A lista NIP-17 é pública; mensagens são enviadas aos relays de recebimento definidos por você e pela outra pessoa.</p><p id="relay-error" class="error" role="alert"></p></div></dialog>
 
   <dialog id="new-chat-dialog" class="dialog-card"><form method="dialog" class="dialog-head"><div><p class="eyebrow">MENSAGEM PRIVADA</p><h2>Nova conversa</h2></div><button class="icon-button" aria-label="Fechar">×</button></form><div class="dialog-body"><label class="field"><span>npub ou chave pública hex</span><input id="peer-input" autocomplete="off" spellcheck="false" placeholder="npub1…"></label><label class="field"><span>Nome local (opcional)</span><input id="peer-name-input" maxlength="80" placeholder="Como você conhece essa pessoa?"></label><label class="field"><span>Relays de perfil (um por linha, opcional)</span><textarea id="peer-relays-input" rows="2" spellcheck="false" placeholder="wss://relay.example"></textarea></label><button id="start-chat-button" class="button primary full" type="button">Abrir conversa</button><p id="new-chat-error" class="error" role="alert"></p></div></dialog>
 

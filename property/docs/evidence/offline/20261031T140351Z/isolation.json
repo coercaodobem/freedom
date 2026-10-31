@@ -1,0 +1,16 @@
+{
+  "previous_checkpoint": "property/docs/evidence/offline/20261031T134844Z/isolation.json",
+  "profile": "default sandbox",
+  "network_disabled_marker": "CODEX_SANDBOX_NETWORK_DISABLED=1",
+  "effective_process_policy": {
+    "lsm": "bwrap//&unpriv_bwrap (enforce)",
+    "cap_eff": "0000000000000000",
+    "no_new_privs": 1,
+    "seccomp": 2,
+    "loopback_bind": "EPERM"
+  },
+  "public_tcp_probe_sent": false,
+  "public_dns_query_sent": false,
+  "verdict": "BLOCKED",
+  "reason": "This profile denies the loopback socket required for browser/relay tests. The alternate profile has IPv4 and IPv6 default routes and uninspectable firewall rules, so runtime network tests remain blocked."
+}

@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const enc = new TextEncoder();
   const dec = new TextDecoder();
-  const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol'];
+  const PUBLIC_RELAY_EXAMPLES = ['wss://relay.damus.io', 'wss://nos.lol'];
   // Stable legacy database ID: preserve existing identities and sessions on this origin.
   const DB_NAME = 'liberdade-local-v1';
   const DB_VERSION = 1;
@@ -17,7 +17,7 @@
   const Contact = window.PropertyContact;
   const eventSourceHints = new WeakMap();
   const state = {
-    db: null, account: null, secret: null, pubkey: '', npub: '', relays: [...DEFAULT_RELAYS],
+    db: null, account: null, secret: null, pubkey: '', npub: '', relays: [],
     inboxRelays: [], peerInboxRelays: new Map(), peerRelayHints: new Map(),
     sockets: new Map(), fetchSubs: new Map(), pendingAcks: new Map(), activePeer: '',
     activeView: 'messages', toastTimer: 0, reconnectTimers: new Map(), unlocking: false, idleTimer: 0,
@@ -46,7 +46,7 @@
     dot.classList.toggle('partial', open > 0 && open < relayCount);
     $('connection-label').textContent = open === 0 ? 'offline' : `${open}/${relayCount} relay${relayCount === 1 ? '' : 's'}`;
     $('relay-count').textContent = `${state.relays.length} relay${state.relays.length === 1 ? '' : 's'}`;
-    $('relay-summary-text').textContent = open ? `${open} conectado${open === 1 ? '' : 's'}` : 'Toque para configurar';
+    $('relay-summary-text').textContent = open ? `${open} conectado${open === 1 ? '' : 's'}` : relayCount === 0 ? 'Adicione um relay para sincronizar' : 'Toque para configurar';
   }
   function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -769,7 +769,7 @@
         refreshing = true; window.location.reload();
       } else showToast('Nova versão disponível. Reabra o app quando terminar.');
     });
-    navigator.serviceWorker.register('./sw.js?v=property-v9', { scope: './', updateViaCache: 'none' })
+    navigator.serviceWorker.register('./sw.js?v=property-v10', { scope: './', updateViaCache: 'none' })
       .then(registration => registration.update())
       .catch(error => console.warn('Property: cache offline indisponível.', error));
   }
@@ -792,7 +792,7 @@
       catch (error) { showError('relay-error', error.message); }
     });
     $('publish-inbox-list').addEventListener('click', () => publishInboxRelayList().catch(error => showError('relay-error', error.message || 'Falha ao publicar a lista NIP-17.')));
-    $('use-default-relays').addEventListener('click', () => { $('relay-input').value = DEFAULT_RELAYS.join('\n'); });
+    $('use-default-relays').addEventListener('click', () => { $('relay-input').value = PUBLIC_RELAY_EXAMPLES.join('\n'); });
     $('new-chat-button').addEventListener('click', () => $('new-chat-dialog').showModal());
     $('empty-new-chat').addEventListener('click', () => $('new-chat-dialog').showModal());
     $('start-chat-button').addEventListener('click', async () => {
