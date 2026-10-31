@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'property-shell-v6';
+const CACHE = 'property-shell-v7';
 const SHELL = ['./', './index.html', './about.html', './styles.css', './app.js', './vault.js', './routing.js', './forwarding.js', './nano.js', './money.js', './marketplace.js', './campaigns.js', './manifest.webmanifest', './assets/icon.svg', './vendor/nostr-tools-2.25.2.bundle.js'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
