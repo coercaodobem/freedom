@@ -28,3 +28,5 @@ Variáveis `PROPERTY_RELAY_*` têm precedência; `LIBERDADE_RELAY_*` continuam c
 Namespaces e autoria Amethyst/Geode são preservados. Relatórios históricos mantêm URL, data e hashes originais para não adulterar evidências. Por isso alguns identificadores legados permanecem no código e nos registros, mesmo com a identidade pública Property.
 
 O diretório de trabalho externo `/home/guilherme/Liberdade` pertence ao workspace desta tarefa e permanece no caminho atual; ele não é o nome do repositório publicado nem do pacote. Renomeá-lo durante a sessão invalidaria as raízes de acesso configuradas. Dentro do checkout, o produto e os comandos usam `property/`.
+
+Se um navegador que já abriu a versão antiga ainda mostrar a marca anterior, abra [a atualização Property](https://coercaodobem.github.io/property/?v=property-v8) uma vez. Ela atualiza somente os arquivos do app e permite voltar à URL principal; não apague os dados do site para mudar o nome.

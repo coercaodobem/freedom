@@ -43,3 +43,7 @@ Consulte `docs/plano-central.md`, `docs/identidade-do-projeto.md` e `docs/plano-
 ## Continuidade de dados e pagamentos
 
 Consulte [migração para Property](docs/migracao-property.md) para dados e instalações existentes, e [pagamentos BTC/XMR/XNO](docs/pagamentos.md) para esquema de valores e limitações.
+
+## Validação Property de 2026-10-31
+
+O commit `31956a60c485d77629cc6e549026822d05a7ae56` passou no [CI com 12 suítes e três sistemas nativos](https://github.com/coercaodobem/property/actions/runs/41186913676) e no [Pages](https://github.com/coercaodobem/property/actions/runs/41186913639). A URL principal mostrou Property e as opções BTC/XMR/XNO; nenhum erro/aviso no console. Os 17 arquivos públicos e o HTML da raiz corresponderam aos hashes da fonte. Registros: [publicação](docs/evidence/pages-property-2026-10-31.json) e [plataformas](docs/evidence/native-platforms-2026-10-31.json). Isso não comprova checkout, liquidação financeira, 24 horas de operação ou dispositivos móveis reais.

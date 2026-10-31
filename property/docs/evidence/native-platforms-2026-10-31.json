@@ -1,8 +1,8 @@
 {
-  "checked_at": "2026-10-31T08:56:44.866319+00:00",
-  "run_id": 41186464037,
-  "source_commit": "2cc93aff5f90bf09ba9e0e3242572398d939da0e",
-  "url": "https://github.com/coercaodobem/property/actions/runs/41186464037",
+  "checked_at": "2026-10-31T09:02:55.638401+00:00",
+  "run_id": 41186913676,
+  "source_commit": "31956a60c485d77629cc6e549026822d05a7ae56",
+  "url": "https://github.com/coercaodobem/property/actions/runs/41186913676",
   "conclusion": "success",
   "jobs": [
     {
@@ -10,7 +10,7 @@
       "conclusion": "success"
     },
     {
-      "name": "Relay nativo (windows-latest)",
+      "name": "Relay nativo (macos-15)",
       "conclusion": "success"
     },
     {
@@ -18,14 +18,14 @@
       "conclusion": "success"
     },
     {
-      "name": "Relay nativo (macos-15)",
+      "name": "Relay nativo (windows-latest)",
       "conclusion": "success"
     }
   ],
   "native_proof": [
-    "native win32/x64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart",
+    "native darwin/arm64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart",
     "native linux/x64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart",
-    "native darwin/arm64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart"
+    "native win32/x64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart"
   ],
   "limits": [
     "No 24-hour soak conclusion",

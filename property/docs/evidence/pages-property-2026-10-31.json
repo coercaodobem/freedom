@@ -1,22 +1,36 @@
 {
-  "checked_at": "2026-10-31T08:42:59.563481+00:00",
+  "checked_at": "2026-10-31T09:02:52.097068+00:00",
   "base_url": "https://coercaodobem.github.io/property/",
-  "source_commit": "2a67c7573196d1f2a7fcb10e0cbc976a0dea2bfe",
-  "pages_run_id": 41185635326,
-  "ci_run_id": 41185635324,
+  "source_commit": "31956a60c485d77629cc6e549026822d05a7ae56",
+  "pages_run_id": 41186913639,
+  "ci_run_id": 41186913676,
+  "root_http_status": 200,
+  "root_matches_index": true,
+  "browser": {
+    "title": "Property",
+    "url": "https://coercaodobem.github.io/property/",
+    "currency_options": [
+      "XNO",
+      "XMR",
+      "BTC"
+    ],
+    "console_errors": 0,
+    "console_warnings": 0,
+    "screenshot": "/home/guilherme/Liberdade/evidence/property-20261031.jpg"
+  },
   "files": [
     {
       "path": "about.html",
       "http_status": 200,
-      "expected_sha256": "fa2d1d3367276280afd4e3abb6f6ea000189832e6f7db260a6b9948713cf6ca7",
-      "served_sha256": "fa2d1d3367276280afd4e3abb6f6ea000189832e6f7db260a6b9948713cf6ca7",
+      "expected_sha256": "669ead0955cb82b642ad26f4683105050ac12dfce02862b005c028f4b584e3b3",
+      "served_sha256": "669ead0955cb82b642ad26f4683105050ac12dfce02862b005c028f4b584e3b3",
       "matches": true
     },
     {
       "path": "app.js",
       "http_status": 200,
-      "expected_sha256": "5903191b338b043067272fb6aa7114da3b6106d50dfe4ce0b554eeb12b2628c1",
-      "served_sha256": "5903191b338b043067272fb6aa7114da3b6106d50dfe4ce0b554eeb12b2628c1",
+      "expected_sha256": "6561a090628d89fd1fd108cc2ef38f84a72a0747bf76ff6fa5d9151df2e036a9",
+      "served_sha256": "6561a090628d89fd1fd108cc2ef38f84a72a0747bf76ff6fa5d9151df2e036a9",
       "matches": true
     },
     {
@@ -43,29 +57,29 @@
     {
       "path": "index.html",
       "http_status": 200,
-      "expected_sha256": "6d43e0cfd5ba259d6ddceb8b887c0e29299c2183397fe6e723b5173b7984267e",
-      "served_sha256": "6d43e0cfd5ba259d6ddceb8b887c0e29299c2183397fe6e723b5173b7984267e",
+      "expected_sha256": "21778219de9e8569f416fab39045150cd87b3da2a084fe90dcb7640bb4407640",
+      "served_sha256": "21778219de9e8569f416fab39045150cd87b3da2a084fe90dcb7640bb4407640",
       "matches": true
     },
     {
       "path": "manifest.webmanifest",
       "http_status": 200,
-      "expected_sha256": "9ae41f35ce8862a1c48060b73f35749685d5dc749a643d1efd70a7db3b66584d",
-      "served_sha256": "9ae41f35ce8862a1c48060b73f35749685d5dc749a643d1efd70a7db3b66584d",
+      "expected_sha256": "1ae14bf12c316c27ecdc5391c5ba7828522b5a4b8014b3668a975edf2450a9ea",
+      "served_sha256": "1ae14bf12c316c27ecdc5391c5ba7828522b5a4b8014b3668a975edf2450a9ea",
       "matches": true
     },
     {
       "path": "marketplace.js",
       "http_status": 200,
-      "expected_sha256": "257c2e4b20e7bdd8461df249ff45fd9c82c77760bb5783e17bd2285001fdc521",
-      "served_sha256": "257c2e4b20e7bdd8461df249ff45fd9c82c77760bb5783e17bd2285001fdc521",
+      "expected_sha256": "795183ece79b19357e8ecc8f560f6f4fc42627b17ce2d817a0711196195c8350",
+      "served_sha256": "795183ece79b19357e8ecc8f560f6f4fc42627b17ce2d817a0711196195c8350",
       "matches": true
     },
     {
       "path": "money.js",
       "http_status": 200,
-      "expected_sha256": "dacdd7e2096dd140ef13c7f3b5c7a3478fb2b0b1d722e36d55156125a308dacb",
-      "served_sha256": "dacdd7e2096dd140ef13c7f3b5c7a3478fb2b0b1d722e36d55156125a308dacb",
+      "expected_sha256": "08d134e055d48fd16b4b2bcbfe8bc94f13c247f5bfed986a628c0ed6d231b268",
+      "served_sha256": "08d134e055d48fd16b4b2bcbfe8bc94f13c247f5bfed986a628c0ed6d231b268",
       "matches": true
     },
     {
@@ -92,8 +106,8 @@
     {
       "path": "sw.js",
       "http_status": 200,
-      "expected_sha256": "076506cfbb2ffef8e1ad7551b08cd834a85f9f9fe6a8f2d3546be1f2b6e55dd3",
-      "served_sha256": "076506cfbb2ffef8e1ad7551b08cd834a85f9f9fe6a8f2d3546be1f2b6e55dd3",
+      "expected_sha256": "67100c29611292a9b7ce64d764a990900617bba2a62aff04ee63d66bcf7409e5",
+      "served_sha256": "67100c29611292a9b7ce64d764a990900617bba2a62aff04ee63d66bcf7409e5",
       "matches": true
     },
     {
