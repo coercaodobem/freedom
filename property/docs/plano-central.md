@@ -9,6 +9,8 @@ Entregar um cliente Nostr chamado Property que funcione como PWA em navegadores 
 
 Este documento organiza a execução. A visão do produto está em [identidade-do-projeto.md](identidade-do-projeto.md); os critérios verificáveis estão em [plano-de-testes-central.md](plano-de-testes-central.md).
 
+**Diretriz de validação offline (2026-10-31):** o executor previsto é **Luna Max**. O plano de testes passa a exigir gates G00–G12, internet bloqueada, jornadas pelo app real, topologia de sete relays locais e pontes, falhas controladas e redes financeiras privadas. O objetivo é **PROPERTY_SCOPE_OFFLINE_PASS**, sem ignorar funções pendentes para aprovar. Resultados anteriores são históricos, não aprovação dos novos gates. Ferramentas ou plataformas ausentes bloqueiam a certificação correspondente; publicação pública e homologação física adicional têm evidência separada.
+
 ## Decisões consolidadas
 
 | Tema | Decisão |
@@ -110,15 +112,15 @@ Para reconstituir a base upstream em uma auditoria separada: clonar `vitorpamplo
 - As carteiras Monero e Nano ficam sob controle local do operador e separadas da identidade Nostr. A integração RPC de cada carteira roda no próprio host, com autenticação/loopback; `enable_control` fica desligado salvo necessidade operacional. Se ativado, o RPC deve escutar apenas em loopback ou ter uma restrição equivalente fora do node, nunca ficar aberto à internet.
 - Exibir patrocínio com clareza, permitir preferência local e não enviar clique/leitura ao anunciante.
 
-**Gate:** política de anúncio, estados financeiros, privacidade e suporte operacional testados em rede local/testnet antes de considerar uso econômico real.
+**Gate:** política de anúncio, estados financeiros e privacidade aprovados nos gates G07–G08, com a engine real e redes privadas locais Bitcoin/Monero/Nano, sem internet nem fundos reais. Testnet pública ou mock de sucesso não substitui essa validação.
 
 ### 7. Beta e lançamento
 
-- Executar integralmente o [plano de testes central](plano-de-testes-central.md), separar falhas de implementação de limitações do navegador e guardar evidência sanitizada.
+- O Luna Max executa integralmente o [plano de testes central](plano-de-testes-central.md), constrói o harness faltante, corrige falhas dentro do escopo autorizado e guarda evidência sanitizada por requisito/caso/gate. Primeiro obter PROPERTY_SCOPE_OFFLINE_PASS; função ausente, caso ignorado ou plataforma indisponível impedem aprovação integral.
 - Fazer revisão independente de criptografia, identidade, cadeia de dependências, código copiado e permissões do node.
 - Só então preparar site institucional e distribuição pública no GitHub Pages, com release versionada, origem/commit visíveis e procedimento de recuperação/atualização.
 
-**Gate de lançamento:** critérios de saída do plano de testes aprovados; sem falhas críticas abertas; versão e artefato publicados correspondem ao commit revisado.
+**Gate de lançamento:** PROPERTY_SCOPE_OFFLINE_PASS sobre a versão candidata, revisão independente e homologações de instalação/dispositivos previstas aprovadas; sem falhas críticas abertas; versão e artefato publicados correspondem ao commit revisado. Aprovação do laboratório offline não certifica publicação, redes públicas ou hardware que não foi ensaiado.
 
 ## Progresso de implementação na branch
 

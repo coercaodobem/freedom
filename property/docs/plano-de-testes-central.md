@@ -1,307 +1,361 @@
-# Plano de Testes Central — Projeto Property
+# Plano de Testes Central — Property
 
-**Status:** execução parcial atualizada em 2026-10-31. Repositório e produto renomeados para Property. As 12 suítes smoke locais passaram, incluindo BTC/XMR/XNO, backups antigos e pacotes portáteis. A matriz [41186913676](https://github.com/coercaodobem/property/actions/runs/41186913676) passou em Linux x86_64, Windows x64 e macOS Apple Silicon, com runtime incluído e persistência após reinício. A PWA está publicada em HTTPS; o registro de arquivos servidos acompanha a versão correspondente. Não há conclusão comprovada do ensaio de 24 horas. Dispositivos móveis reais e engine de pagamento/checkout continuam pendentes.
-**Objetivo:** verificar reuso do Amethyst, dependências, identidade, comunicação, nodes, PWA, publicidade e pagamentos BTC/XMR/XNO.
+**Atualizado:** 2026-10-31. **Executor previsto:** Luna Max. **Estado desta revisão:** PLANEJADO; os novos gates ainda não foram executados.
 
-## 1. Baseline do MVP
+## 1. Objetivo e autoridade
 
-Este plano considera a visão consolidada em [identidade-do-projeto.md](identidade-do-projeto.md) e [plano-central.md](plano-central.md):
+Demonstrar, por testes reproduzíveis de uso e de integração, que todo o comportamento funcional previsto no escopo consolidado do Property funciona sem acesso à internet, inclusive com vários layers/relays, usuários, falhas e pagamentos em redes privadas locais. O resultado central é PROPERTY_SCOPE_OFFLINE_PASS, definido na seção 4. Uma coleção de testes unitários aprovados não basta.
 
-- A interface principal é uma PWA para navegadores móveis e desktop. Durante desenvolvimento, usar ambiente local/staging; o site institucional e a publicação pública ficam para depois de o app estar pronto.
-- Na fase de lançamento, o GitHub Pages pode servir o pacote estático diretamente do repositório público Property. Ele entrega a interface e atualizações; não encaminha mensagens nem fornece funções de backend.
-- O navegador conecta diretamente por WebSocket seguro a vários relays compatíveis com Nostr; `ws://` só é permitido para localhost de desenvolvimento. Relays transportam eventos/dados, não código executável do cliente.
-- O pacote de runtime contém os arquivos executáveis necessários: sem scripts, módulos, fontes ou WebAssembly carregados de CDNs, Amethyst, Maven ou JitPack enquanto o usuário abre o app. O repositório registra versões, hashes, origem e licenças das dependências.
-- A base prioritária é um fork/reuso máximo do repositório público do Amethyst. Selecionar e registrar um commit fixo, revisar módulos e dependências, preservar atribuição e licença MIT. Reutilizar Quartz/lógica Nostr, eventos, relays, identidade, criptografia, NIP-17, NIP-15 e testes quando compatíveis. O alvo PWA não é presumido: a UI Android/desktop precisa passar por prova de compatibilidade web.
-- Mensagens privadas usam criptografia ponta a ponta baseada em padrão Nostr compatível, com NIP-17 como escolha inicial. Relays guardam eventos cifrados; validar metadados visíveis e versão exata do protocolo antes de implementar.
-- O cliente publica em mais de um relay selecionado. A PWA tem uma ponte opcional e de melhor esforço entre relays selecionados: eventos públicos assinados são replicados; gift wraps NIP-17 só seguem para inbox relays da própria identidade. Isso não é encaminhamento P2P genérico nem execução móvel em segundo plano.
-- A identidade é criada com chave aleatória local. A senha cifra/desbloqueia a chave armazenada no navegador; não é usada diretamente como chave privada e não é enviada a nenhum servidor. A recuperação é local, sem redefinição central.
-- PCs podem operar relays/nodes continuamente. A PWA móvel só colabora enquanto ativa e não promete manter conexão ou node em segundo plano.
-- Publicidade é um evento/cartão separado de mensagens privadas. O anunciante envia uma campanha assinada com criativo, link, oferta com moeda, valor atômico e validade. O node revisa e aceita ou recusa antes de receber pagamento.
-- Ao aceitar, o node emite endereço exclusivo da moeda e prazo. O anúncio só é publicado após pagamento confirmado. Recusa anterior ao pagamento não exige reembolso; pagamentos inesperados, atrasados ou incompatíveis seguem devolução como nova transferência.
-- O preço é uma oferta por colocação durante período acordado, sem cobrança por clique nem garantia de impressões. O node controla sua carteira localmente; a chave Nano é separada das chaves Nostr e não fica na PWA.
+Fontes de requisitos: [identidade do projeto](identidade-do-projeto.md), [plano central](plano-central.md), [pagamentos](pagamentos.md) e [migração](migracao-property.md). Esta revisão substitui a ordem de execução e os gates da versão anterior. Os cenários e resultados anteriores foram preservados integralmente em [histórico de testes de 2026-10-31](historico-testes-2026-10-31.md); não constituem aprovação dos novos gates.
 
-Referências de protocolo para pesquisa e fixação da versão no projeto: [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md), [NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md), [unidades e blocos Nano](https://docs.nano.org/integration-guides/the-basics/). Referências upstream do reuso: [Amethyst](https://github.com/vitorpamplona/amethyst), [README e arquitetura](https://github.com/vitorpamplona/amethyst/blob/main/README.md), [licença](https://github.com/vitorpamplona/amethyst/blob/main/LICENSE). Esses links são documentação; não podem ser dependências do cliente em runtime.
+Neste plano, offline significa **internet bloqueada, rede local de laboratório permitida**. HTTP, HTTPS, WebSocket, RPC de carteiras e sincronização de blockchains ocorrem somente entre processos, VMs ou aparelhos autorizados no laboratório isolado. Há dois ensaios distintos: comunicação pela rede local isolada e abertura do shell já armazenado com toda conexão de dados interrompida. Este último não deve prometer envio de mensagem sem nenhum relay alcançável.
 
-## Execução registrada
+Layers designa as camadas exercitadas no laboratório: navegador/identidade, descoberta, vários relays e pontes, armazenamento e adaptadores financeiros. A cadeia entre relays usa o comportamento real do Property. Não pressupõe roteamento privado genérico, onion routing, novo protocolo P2P ou execução permanente de PWA suspensa.
 
-| Data | Comando/ensaio | Resultado e limite |
+## 2. Escopo que não pode ser reduzido para aprovar
+
+| Requisito | Comportamento obrigatório | Gates |
 |---|---|---|
-| 2026-10-27 | `node property/tests/protocol-smoke.mjs` | PASS: assinatura/embrulho NIP-17, isolamento de chave, plaintext ausente no envelope, validação e roteamento de listas kind 10050, AES-GCM e hash vendorizado. |
-| 2026-10-27 | `node property/tests/vault-smoke.mjs` | PASS: criação e desbloqueio do cofre, senha incorreta, sessão local persistente e backup cifrado. |
-| 2026-10-27 | `node property/tests/app-contract-smoke.mjs` | PASS: CSP, assets locais/PWA, caminhos relativos compatíveis com `/property/`, registro de service worker, ações Pages fixadas por SHA, ausência de `eval`, sintaxe JS e shell. |
-| 2026-10-27 | Simulação local `http://127.0.0.1:4175/property/` e `/property/about.html` | PASS: app e página Sobre servidos da subpasta prevista para Pages; navegação interna permaneceu em `/property/`; nenhum conteúdo foi publicado externamente. |
-| 2026-10-27 | ESLint 6.4 `--rule no-undef:error` nos módulos web | PASS: sem referências globais não definidas. |
-| 2026-10-27 | `node property/tests/relay-package-smoke.mjs` | PASS: 130 segmentos reconstroem o pacote portátil exato de 67.845.545 bytes e conferem com SHA-256 fixado. |
-| 2026-10-27 | `./property/relay/start.sh` usando somente `dist-parts/` e `node property/tests/relay-integration.mjs ws://127.0.0.1:7447` | PASS: reconstrução, verificação SHA-256 e início padrão sem Java instalado; relay validou eventos cifrados/kind 10050. |
-| 2026-10-27 | `PROPERTY_RELAY_PORT=17450 PROPERTY_RELAY_DATA_DIR=/tmp/property-relay-cli-test-data PROPERTY_RELAY_CONFIG_DIR=/tmp/property-relay-cli-test-config ./property/relay/start.sh` + `node property/tests/relay-integration.mjs ws://127.0.0.1:17450` | PASS: launcher Ubuntu iniciou Geode em loopback usando dados temporários; NIP-17, kind 10050 e listagem NIP-15 com `price_raw` exato passaram; dados temporários removidos. |
-| 2026-10-27 | `:geode:geodeImage` com JDK 21 local | PASS: Geode 1.20.0 e runtime Java portátil para Linux x86_64. |
-| 2026-10-27 | `node property/tests/relay-integration.mjs ws://127.0.0.1:17447` e `ws://127.0.0.1:7447` | PASS: Geode aceitou/armazenou envelopes cifrados e kind 10050; consulta retornou a lista de inbox assinada e a mensagem permaneceu ilegível no relay. A segunda execução usou o comando/porta padrão do launcher; diretórios de dados temporários. |
-| 2026-10-27 | `node property/tests/relay-integration.mjs ws://127.0.0.1:17448` | PASS: Geode local armazenou e serviu evento NIP-15 assinado com valor numérico `0.25` e `price_raw` exato, além dos testes NIP-17/kind 10050. O valor raw permaneceu inalterado; nenhum pagamento foi feito. |
-| 2026-10-27 | Validar diretórios do launcher e usuário do processo | PASS: relay iniciado por UID não-root; pasta de dados e configuração `0700`, arquivo de configuração `0600`; hash do pacote portátil confere com o launcher. |
-| 2026-10-27 | Abrir PWA em `http://127.0.0.1:4173/` e revisar DOM, scripts e console | PASS: tela inicial e assets carregaram; `routing.js` foi servido localmente; campos e controles NIP-17 existem; sem erros de console. Não cobre login interativo em dispositivos reais nem publicação web. |
-| 2026-10-27 | `node property/tests/forwarding-smoke.mjs` | PASS: assinatura, tipo e idade de evento; deduplicação e exclusão da origem; kind 4 plaintext excluído; gift wrap NIP-17 somente para o destinatário local; limites de 60 eventos/minuto e 2 MB/minuto em bytes UTF-8 após fan-out. |
-| 2026-10-27 | `bash property/tests/run-bridge-integration.sh 17448 17449` | PASS: dois Geode temporários; evento público assinado replicado, gift wrap cifrado encaminhado apenas ao inbox relay do destinatário, eco ignorado; NIP-17, kind 10050 e listagem NIP-15 com `price_raw` exato. Não prova execução em segundo plano ou operação na Internet pública. |
-| 2026-10-27 | `node property/tests/nano-units-smoke.mjs` | PASS: XNO/raw em inteiros exatos, limites de 1 raw e 1 XNO, vírgula decimal e entradas inválidas. Não valida campanhas, carteiras, RPC ou transações. |
-| 2026-10-27 | `node property/tests/marketplace-smoke.mjs` | PASS: parsing do preço XNO, campo `price_raw` exato, leitura/fallback seguro e rejeição de moeda e faixa incompatíveis com a publicação NIP-15. |
-| 2026-10-27 | `node property/tests/marketplace-smoke.mjs` (edição/retirada) | PASS: link HTTPS seguro, identidade estável `d` ao editar e retirada NIP-09; evento de outra autoria e pedido mais antigo não removem a oferta, e ID inconsistente é rejeitado. |
-| 2026-10-27 | `bash property/tests/run-bridge-integration.sh 17452 17453` | PASS: além da ponte pública/NIP-17, dois relays Geode locais aceitaram criação, atualização addressable e retirada assinada NIP-09; o leitor esconde cópia antiga após retirada. Sem tráfego para a Internet pública. |
-| 2026-10-27 | `node property/tests/campaigns-smoke.mjs` | PASS: assinatura, IDs e marcadores únicos, URL HTTPS, rejeição de credenciais/IP/SVG, XNO raw inteiro, expiração, bloqueio local e limite local de 24 horas. Não valida pagamento na ledger nem aceite/refundo pelo node. |
-| 2026-10-28 | `bash property/tests/run-smoke.sh` | PASS: suíte de unidades/raw Nano, marketplace, campanhas, protocolo NIP-17/kind 10050, cofre, ponte, contrato da PWA e reconstrução/hash dos 130 segmentos do relay. |
-| 2026-10-27 | `node property/tests/relay-soak.mjs 86400 60 17447` (run `fb20fd0e-59c1-4c57-b4ad-4f616a7f087a`) | INCOMPLETO: o início foi registrado, mas não há processo ativo nem evidência de conclusão por 24 horas. Não contar como aprovação; reiniciar e aguardar o resultado final para fechar NOD-01. |
-| 2026-10-28 | `node property/tests/relay-soak.mjs 86400 60 17447` (início 08:00:24 UTC, run `888f8ad3-f4a7-4425-897e-1870812fb7ff`) | SEM CONCLUSÃO COMPROVADA: houve prontidão do relay e probes aprovadas; em 2026-10-30, a sessão original já não está disponível e não foi recuperado resultado final de 24 horas. Não contar como PASS. |
-| 2026-10-30 | Autenticação oficial do GitHub CLI e `push-github.sh` local | PASS: conta `coercaodobem`, destino `coercaodobem/property`, branch `modelo-mvp`; o comando de push retornou sucesso e a branch local estava sincronizada. Nenhuma chave da conta Gymoo foi usada para o envio. |
-| 2026-10-30 | Habilitar Pages com origem GitHub Actions, permitir `modelo-mvp` e executar workflow `41130981007` | PASS: tentativa 2 concluída com sucesso no commit `e525f3028391cea6133fe7982b4e342ee576f449`; URL HTTPS `https://coercaodobem.github.io/property/`. |
-| 2026-10-30 | Abrir a URL pública e comparar os 16 arquivos publicados com a fonte | PASS: tela inicial carregou; nenhum erro ou aviso no console; todos os arquivos responderam HTTP 200 com SHA-256 idêntico ao checkout. [Registro dos hashes](evidence/pages-2026-10-30.json). Não cobre criação de identidade, mensagens pela Internet ou dispositivos reais. |
+| Origem e autonomia | Reuso Amethyst/Geode documentado, licenças, hashes, dependências locais e nenhuma busca de código em runtime | G00, G02 |
+| Identidade | Chave aleatória local, senha protegendo cofre, sessão, bloqueio, backup e recuperação da mesma identidade | G01, G03, G10 |
+| Comunicação privada | NIP-17, kind 10050, destinatário offline, repetição, falhas, confidencialidade e conexão direta aos relays | G04, G05, G09, G10 |
+| Descentralização | Escolha/troca de relays, pontes voluntárias, vários caminhos e continuidade sem o host do app | G05, G09 |
+| PWA utilizável | Primeiro uso, erros claros, cache, atualização, migração, acessibilidade e fluxo completo pela interface | G02, G03, G10, G12 |
+| Hangout | Publicar/ler notas públicas, verificar autoria, deduplicar e iniciar conversa a partir da autoria | G06, G10 |
+| Marketplace inicial | Publicar, descobrir, editar e retirar ofertas; BTC/XMR/XNO exatos; iniciar contato | G06, G08, G10 |
+| Sustentabilidade dos nodes | Oferta, aceite/recusa, publicação paga, expiração e devolução; patrocínio opt-in e sem rastreio central | G07, G08, G10 |
+| Nodes de computador | Runtime incluído, dados persistentes, reinício, limites, retenção e disponibilidade de 24 horas | G00, G09, G11, G12 |
+| Plataformas | PWA em desktop/Android/iOS e pacotes de relay Linux x86_64, Windows x64 e macOS Apple Silicon | G12 |
 
-| 2026-10-31 | Incorporar commit `55e379c9db` e renomear repositório/produto | Property em `coercaodobem/property`; diretório do produto `property/`; identificadores legados preservados somente para compatibilidade e evidências. |
-| 2026-10-31 | `bash property/tests/run-smoke.sh` | PASS: 12 suítes, incluindo unidades BTC/XMR/XNO, ofertas/campanhas, cofre e backup legado, ponte, CSP/assets, migração de launcher, atualização segura do cache PWA e todos os segmentos. |
-| 2026-10-31 | `bash property/tests/run-bridge-integration.sh 17452 17453` | PASS: dois relays isolados, ponte pública, NIP-17 e NIP-15. A primeira tentativa na sandbox foi bloqueada por permissão de sockets; repetição com acesso loopback autorizado passou. |
-| 2026-10-31 | `node property/tests/native-relay-integration.mjs` local e CI | PASS em Linux x86_64, Windows x64 e macOS arm64: Java incluído, SQLite, NIP-17, ofertas de 1 satoshi e 1 piconero, edição/retirada e mesmos eventos após reinício. [Evidência da matriz](evidence/native-platforms-2026-10-31.json). A falha Windows inicial de `Get-FileHash` foi corrigida usando APIs .NET padrão. |
+A engine financeira de campanhas permanece no escopo planejado, mesmo estando ausente no MVP atual. Sua ausência reprova a implementação correspondente; não autoriza apagar o gate, trocar o teste por um mock ou declarar a campanha paga porque existe um txid no evento.
 
-| 2026-10-31 | Pages [41186913639](https://github.com/coercaodobem/property/actions/runs/41186913639), commit `31956a60c485d77629cc6e549026822d05a7ae56` | PASS: nova URL principal mostra Property; seletor contém BTC/XMR/XNO; console sem erros/avisos; 17 arquivos públicos e raiz HTTP 200 com hashes idênticos ao checkout. [Evidência](evidence/pages-property-2026-10-31.json). Não prova login, mensagens em rede pública ou teste físico de celular. |
+Checkout, custódia, escrow e pagamentos de compras do marketplace, grupos privados, Lightning e relay móvel continuamente ativo não estão definidos como funcionalidades do MVP consolidado. Testar explicitamente que o app não simula essas capacidades. Mac Intel e outras arquiteturas de relay continuam expansões pendentes, sem alegação de suporte aprovado. Se o mantenedor ampliar esse escopo, acrescentar casos e gates antes de promover a ampliação.
 
-**Não aprovado ou não executado:** ensaio completo de 24 horas; Android/iOS; teste de perda de rede em aparelho; revisão independente de segurança; marketplace completo; engine de campanhas BTC/XMR/XNO e verificação de pagamento; checkout; auditoria integral de dependências. O repositório `coercaodobem/property`, o push e a publicação inicial de Pages foram verificados em 2026-10-30. O leitor de campanha opt-in não é evidência de pagamento. Os itens pendentes continuam gates antes de beta público.
+## 3. Instruções de execução para o Luna Max
 
-Para repetir a suíte local: `bash property/tests/run-smoke.sh`. Para a integração entre dois relays isolados: `bash property/tests/run-bridge-integration.sh [porta-origem] [porta-destino]`. O ensaio de 24 horas é separado: `node property/tests/relay-soak.mjs 86400 60 17447`; em execução curta, informe duração e intervalo menores mantendo porta loopback livre.
+1. Ler primeiro este documento, os resumos das fontes e o AGENTS.md mais próximo. Trabalhar em coercaodobem/property, branch modelo-mvp, preservando alterações existentes. Não usar Amethyst upstream ou Gymoo como destino.
+2. Inventariar o que existe e o que falta. Diferenciar teste existente, teste a implementar, funcionalidade ausente e ferramenta de laboratório ausente. Este documento não afirma que os scripts novos da seção 7 já existam.
+3. Executar os gates em ordem. Para cada caso, ligar requisito, código real exercitado, passos, resultado esperado e evidência. Abrir os trechos de código pertinentes à falha, evitando carregar toda a base upstream.
+4. Construir a infraestrutura de testes que estiver faltando. Quando houver falha do produto, corrigi-la dentro do escopo autorizado, registrar o defeito e repetir o caso e sua regressão. Não mudar o resultado esperado para acomodar o defeito. Mudanças de protocolo, criptografia, chaves ou desenho financeiro seguem o escopo aprovado e as instruções do repositório.
+5. Nenhuma afirmação de PASS vem de inspeção do código, texto de log isolado, tela inicial, mock de sucesso ou resultado histórico. Cada aprovação exige execução do comportamento e asserções independentes sobre seus efeitos.
+6. Usar exclusivamente identidades, mensagens, carteiras e valores sintéticos. Segredos ficam em diretórios temporários privados; não vão para relatórios, commits, HAR, capturas ou console. Não substituir contas reais ou diretórios de dados do usuário.
+7. Não pedir nova autorização para os mesmos testes locais já autorizados. Não alterar firewall global, desligar a rede do computador do usuário, reiniciar o host, usar mainnet ou publicar dados como parte do ensaio. Falhas de rede/energia são simuladas apenas nos processos, volumes e interfaces do laboratório.
+8. Persistir progresso após cada caso/gate. Na retomada, ler o manifesto e o último resultado; verificar se o commit mudou e invalidar aprovações afetadas. Um ensaio interrompido não vira PASS.
+9. Não delegar, trocar de modelo, abrir PR ou publicar uma release automaticamente por causa deste plano. Luna Max é o executor indicado; o trabalho continua pelo fluxo autorizado do repositório.
 
-## Mudanças do commit do mantenedor e migração Property
+**Definição de conclusão:** entregar o relatório final com os resultados de todos os gates e os artefatos necessários para outra execução. Se faltar recurso ou implementação, entregar o estado real sem anunciar que o escopo inteiro passou. Não transferir ao usuário testes que possam ser executados no laboratório disponível.
 
-O commit `55e379c9dbdf8637b32422d32e982460aa5862e5` acrescentou a marca Property, XMR e a visão de Windows/macOS/Linux/Android/iOS. Os registros acima são históricos; a publicação de 2026-10-30 ocorreu no caminho anterior e seus hashes não devem ser alterados. A nova publicação deve ter relatório próprio.
+## 4. Gates e regra de aprovação
 
-| ID | Caso | Critério |
+| Gate | Entrega verificável | Depende de |
 |---|---|---|
-| PROP-01 | Nome público, repo, links e workflows | Property e `coercaodobem/property`; assets sob `/property/`, sem CDN executável; namespaces upstream e evidências históricas preservados |
-| PROP-02 | Sessão/identidade após atualização no mesmo navegador/origem | Banco legado reutilizado, sem regenerar chave ou apagar conversas/preferências; validar em navegador real |
-| PROP-03 | Importar backup anterior | Mesma chave pública com senha correta; senha errada/backup adulterado rejeitados |
-| PROP-04 | Dados e configuração de relay existentes | `PROPERTY_RELAY_*` prevalece, aliases legados aceitos, diretórios antigos reutilizados sem apagar DB |
-| PROP-05 | Publicação e instalação | Workflow passa, URL nova abre sem erros, manifesto/ícone/caches locais corretos; reinstalar atalho quando necessário |
-| MONEY-01 | 1 XMR, 1 piconero e uint64 | Conversão exata em strings inteiras; mais de 12 casas ou overflow rejeitados |
-| MONEY-02 | 1 XNO, 1 raw e uint128 | Conversão exata; mais de 30 casas ou overflow rejeitados |
-| MONEY-03 | Oferta BTC/XMR/XNO e edição | Seleção de moeda, `price_atomic` exato, vitrine correspondente; `price_raw` exclusivo para compatibilidade XNO; round-trip no relay |
-| MONEY-04 | Campanha v2 e legada | Moeda/unidade explícitas em v2; legado exclusivamente XNO; rejeitar moeda desconhecida, campos ambíguos, assinatura inválida e transação inexistente no futuro verificador |
-| XMR-01 | Recebimento por subendereço | Carteira sincronizada identifica campanha, montante atômico e transação; hash declarado não é prova |
-| XMR-02 | Confirmação/desbloqueio e reorganização | Política registrada, publicação suspensa enquanto insuficiente; repetir após reorganização sem duplicar campanha |
-| XMR-03 | Recusa/reembolso | Endereço de devolução autenticado no acordo, taxas e mínimo explícitos, valor líquido conciliado, execução idempotente; não inferir origem de uma transferência Monero |
-| XMR-04 | RPC e segredos | Carteira/RPC autenticado local, chave distinta da Nostr; sem seed/token em PWA, eventos ou logs |
-| XMR-05 | Atraso/falha/valor errado | Pagamento pendente reconciliado após reinício; moeda errada e pagamento duplicado não ativam campanha indevidamente |
+| G00 | Laboratório preparado, inventariado e isolado da internet | — |
+| G01 | Regressão técnica existente aprovada dentro do isolamento | G00 |
+| G02 | Origem, pacote, shell offline, atualização e migração | G01 |
+| G03 | Identidade, recuperação e contato pela interface | G02 |
+| G04 | Mensagens ponta a ponta por relays reais | G03 |
+| G05 | Rede com múltiplos relays/camadas, caminhos e limites | G04 |
+| G06 | Hangout e marketplace percorridos pela interface e pelo relay | G05 |
+| G07 | Máquina de estados real de campanhas e privacidade | G06 |
+| G08 | BTC/XMR/XNO em redes privadas locais com adaptadores reais | G07 |
+| G09 | Falhas, abuso, recuperação e persistência | G08 |
+| G10 | Jornadas completas no navegador e metas de usabilidade | G09 |
+| G11 | Repetibilidade, ensaio real de 24 horas e reconciliação | G10 |
+| G12 | Matriz offline dos sistemas e navegadores alvo | G11 |
 
-`money-smoke.mjs`, `marketplace-smoke.mjs`, `campaigns-smoke.mjs` e `vault-smoke.mjs` cobrem conversão, parsing e compatibilidade criptográfica local. `relay-integration.mjs` inclui round-trip de uma oferta de 1 piconero. Casos de carteira, checkout e reembolso continuam **não implementados/não executados**. Não usar fundos de produção.
+Estados por caso: PASS, FAIL, BLOCKED ou NOT_RUN. Funcionalidade ausente corresponde a FAIL; ferramenta/aparelho ausente corresponde a BLOCKED. Casos de rejeição aprovam quando a rejeição esperada acontece e o efeito proibido é comprovadamente ausente. Não existe aprovação por skip, TODO, warning ou erro engolido.
 
-### Matriz de plataformas exigida
+Todos os casos de um gate são obrigatórios. O gate passa somente com 100% dos casos em PASS, asserções completas e evidências válidas do código testado. Dependência reprovada bloqueia a certificação dos gates seguintes; diagnósticos independentes podem continuar, mas não produzem aprovação integral antecipada.
 
-| Plataforma | Interface | Relay |
-|---|---|---|
-| Ubuntu/Linux x86_64 | Navegador e instalação PWA quando suportada | Pacote incluído; executar smoke, integração e gate de 24 horas |
-| Windows | Validar Edge/Chrome, instalação e recuperação | Pacote PowerShell x64 incluído; validar execução, SQLite e reinício no CI Windows |
-| macOS | Validar Safari/Chrome e instalação disponível | Pacote arm64 incluído; validar no CI macOS Apple Silicon. Intel e distribuição assinada/notarizada pendentes |
-| Android | Validar navegador, instalação PWA, rede e suspensão reais | Solução contínua nativa ainda em pesquisa; não prometer segundo plano na PWA |
-| iOS/iPadOS | Validar Safari, adicionar à tela inicial, recuperação e suspensão reais | Solução contínua ainda em pesquisa; registrar restrições efetivas da plataforma |
+- **OFFLINE_FUNCTIONAL_PASS:** G00 a G11 aprovados.
+- **OFFLINE_PLATFORM_PASS:** G12 aprovado para a matriz declarada, sem usar emulação visual como prova de sistema nativo.
+- **PROPERTY_SCOPE_OFFLINE_PASS:** os dois resultados anteriores aprovados sobre o mesmo código e artefatos compatíveis. Nenhum FAIL, BLOCKED, NOT_RUN ou defeito funcional aberto do escopo.
+- Publicação GitHub Pages, redes públicas, revisão independente de segurança e homologação física adicional de instalação/background são registros separados. Não são simuladas como resultados reais, não são necessárias para o laboratório funcionar e não são certificadas pelo resultado offline.
 
-A matriz é um requisito de execução, não uma declaração de suporte testado. Critérios econômicos específicos e fontes estão em [pagamentos.md](pagamentos.md); preservação de dados em [migracao-property.md](migracao-property.md).
+O orquestrador deve retornar código 0 somente para o perfil solicitado integralmente aprovado; 1 para reprovação e 2 para bloqueio, interrupção ou infraestrutura incompleta. Um perfil parcial aprovado não deve usar o nome PROPERTY_SCOPE_OFFLINE_PASS.
 
-## 2. Preparação e segurança dos testes
+## 5. Preparação e topologia do laboratório
 
-### Ambientes
+### 5.1 Ambiente fechado
 
-1. **Local:** aplicação, dois ou mais relays isolados, node de publicidade, carteira simulada e ferramenta de captura de rede.
-2. **Staging/testnet:** PWA HTTPS em host controlado, relays de teste, Bitcoin regtest/signet, Nano testnet/local e Monero regtest/stagenet. Testar o fluxo planejado do GitHub Pages sem lançar o site institucional antes de o app estar pronto.
-3. **Dispositivos reais:** pelo menos um Android, um iPhone/iPad e um PC; testar navegadores representativos.
-4. **Ensaio de disponibilidade:** node de PC operando continuamente por 24 horas, com interrupções de rede e reinicialização programadas.
+- Fixar commit/diff, versões de protocolo, Node.js 22+, Python local quando necessário, navegadores, ferramentas de automação, runtimes, binários de moedas e licenças. Inventariar hashes de todos os executáveis usados.
+- Preparação de ferramentas é uma fase distinta da execução offline. Ferramenta faltante gera BLOCKED com caminho/versão/hash necessários. Não baixar pacotes, navegadores, imagens Docker, Maven, npm ou atualizações durante os testes. Caches preexistentes só valem se inventariados e verificáveis. Cache de build ausente bloqueia o teste de build offline, sem afetar a definição do pacote de runtime.
+- Usar namespace de rede, VMs ou rede de contêineres já disponível sem rota externa; em Windows/macOS, usar isolamento equivalente na VM/máquina de laboratório. Autorizar apenas endereços/portas locais declarados. Uma rota externa residual, inclusive IPv6, DNS, proxy, WebRTC ou processo filho, reprova o isolamento.
+- Provar o bloqueio em processos pertencentes ao laboratório com uma tentativa TCP para endereço de documentação não permitido e uma consulta DNS externa sob timeout. Registrar o motivo da negação, regras efetivas e contadores, sem depender de o destino estar disponível. Um erro de DNS isolado não prova isolamento.
+- Capturar conexões por processo e requisições do navegador. Desativar no perfil descartável sincronização de conta, atualização/extensões e fallback para relays públicos. Relays padrão do app devem ser substituídos por configuração de laboratório antes de qualquer conexão externa; se não existir esse caminho seguro, preparar o harness/configuração e registrar a lacuna do produto.
+- O bloqueio de rede deve ser provado antes dos fluxos e verificado ao final. Mock/interceptação do navegador é defesa adicional, nunca a única fronteira.
+- Servir o mesmo bundle em localhost e sob o caminho /property/. Para HTTPS/WSS, usar CA/certificado local de teste confiado apenas no laboratório. Não aprovar ignorando globalmente erros TLS. Capturar também uma tentativa WSS com certificado inválido e comprovar rejeição.
+- Cada relay usa processo, porta, configuração e banco separados; cada identidade usa contexto/perfil de navegador separado. Dados do laboratório ficam em diretório temporário exclusivo. Nenhum relay de produção é iniciado/parado.
 
-Não usar seed, carteira ou fundos de produção. Testes em mainnet ficam fora deste plano.
+**Recursos:** começar por dois relays e medir RSS, CPU, disco e tempo; ampliar para a topologia completa sem reduzir os cenários. Como orçamento inicial de laboratório, reservar 4 vCPUs, 8 GiB de RAM e 6 GiB de disco livre. Validar o orçamento antes de expandir; limitar filhos a 70% da RAM disponível, reservar 2 GiB de disco e parar de forma limpa ao atingir o limite. Esses valores são parâmetros de ensaio, não consumo medido nem requisito final do produto. Hardware insuficiente gera BLOCKED. Ensaio de 24 horas só começa após os gates curtos passarem e com orçamento registrado.
 
-### Dados de teste
+### 5.2 Atores e sete relays reais
 
-- Usuário A, usuário B e usuário não autorizado C, com chaves independentes.
-- Dois ou mais relays, incluindo um relay desligável durante os testes.
-- Node de PC e PWA móvel.
-- Campanhas válidas, expiradas, duplicadas, malformadas, com imagem excessiva e com link inseguro.
-- Valores Nano em raw: 1 raw, valores fracionários representativos, 1 XNO em raw e valores de fronteira.
+| Ator | Papel isolado |
+|---|---|
+| A e B | Remetente e destinatário, com identidades e cofres independentes |
+| C | Terceiro sem autorização, relay hostil e entradas adulteradas |
+| P12, P23, P34 | Pontes públicas usando o módulo real do Property; uma instância por ligação |
+| D | Anunciante sintético, sem relação de confiança com os usuários |
+| N1 e N2 | Operadores independentes de node/campanha, com políticas e carteiras distintas |
+| H | Servidor estático local; entrega somente arquivos, sem backend de mensagens |
 
-### Evidências por caso
+| Relay | Função |
+|---|---|
+| R0 | Descoberta local de perfis e listas kind 10050 |
+| R1, R2, R3, R4 | Rede de distribuição de eventos públicos |
+| R5, R6 | Inboxes privados de A e B, respectivamente |
 
-Registrar ID do teste, versão/commit, dispositivo e navegador, configuração do relay, passos, resultado, horário e evidência mínima necessária. Não anexar chaves privadas, seeds, conteúdo de mensagens ou dados pessoais aos relatórios.
+Usar a lista de A com R5 e R3, e a de B com R6 e R4 para testar redundância de inbox. O mesmo relay pode armazenar eventos públicos e envelopes privados; isso não autoriza a ponte pública a encaminhar esses envelopes.
 
-## 3. Fase 0 — Reuso do Amethyst e cadeia de dependências
+Topologia inicial, com ACLs de teste que impedem atalhos:
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| SRC-01 | Registrar o commit Amethyst selecionado para a integração. | O commit é imutável e aparece no inventário de origem; build e testes não usam branch móvel ou snapshot como base de produção. |
-| SRC-02 | Inventariar módulos reutilizados, dependências transitivas e licenças. | Cada componente tem origem/versão/licença registrada; avisos MIT e atribuições permanecem; componente não revisado não entra no pacote. |
-| SRC-03 | Comparar as capacidades escolhidas com os módulos Amethyst existentes. | O que for reutilizado tem cobertura de teste ou teste de caracterização; código duplicado só é criado quando o componente não serve ao browser ou ao requisito. |
-| SRC-04 | Abrir/buildar a PWA com carregamento de código externo bloqueado. | Todos os scripts, módulos, fontes e WebAssembly de execução vêm do repositório/pacote Property; conexões permitidas são apenas dados de relays e serviços explicitamente documentados. |
-| SRC-05 | Inspecionar configuração e tráfego por dependências dinâmicas. | Nenhum código carregado de CDN, Amethyst upstream, JitPack, Maven ou versão SNAPSHOT durante uso; versão e hash de dependência fazem parte do inventário. |
-| SRC-06 | Fazer prova de compatibilidade web do código Amethyst selecionado. | A prova conecta ao relay no navegador e não pressupõe que UI Android/desktop seja PWA; incompatibilidades e camada de adaptação são documentadas. |
-| SRC-07 | Repetir build do mesmo commit em ambiente limpo/controlado. | Artefato e proveniência correspondem ao commit e às versões fixadas; diferenças de build ficam explicadas. A meta de reprodutibilidade é registrada antes do beta. |
+    A -> R1 -> P12 -> R2 -> P23 -> R3 -> P34 -> R4 -> B
+    A/B -> R0                       descoberta assinada
+    A -> inboxes de B: R6 e R4       NIP-17 direto
+    B -> inboxes de A: R5 e R3       NIP-17 direto
+    H -> arquivos da PWA             sem encaminhar mensagens
 
-## 4. Fase A — PWA e distribuição
+Para a cadeia pública, A só publica em R1, B só lê em R4 e cada ponte só acessa os dois endpoints previstos. Depois testar diamante, ciclo, estrela e partição. Registrar explicitamente cada ligação adicional. Interromper P23 deve interromper a cadeia simples; se o evento ainda chegar, existe atalho ou isolamento incorreto e o caso reprova.
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| PWA-01 | Abrir a aplicação em HTTPS no ambiente de teste e, na fase de lançamento, no GitHub Pages publicado do repositório público Property. | Interface carrega sem erro; fonte/commit da versão publicada é identificável; a origem de distribuição não é requisito para conectar aos relays depois do carregamento. |
-| PWA-02 | Instalar ou adicionar à tela inicial nos navegadores móveis e desktop suportados. | Ícone, nome e modo de abertura corretos; onde a instalação não for suportada, o site continua utilizável e apresenta instrução adequada. |
-| PWA-03 | Abrir a interface sem conexão após o primeiro carregamento. | Shell, navegação essencial e estado local são apresentados; o app informa que a rede está desconectada. |
-| PWA-04 | Atualizar a versão hospedada e reabrir o PWA. | Atualização é aplicada sem apagar chaves, configurações, mensagens locais ou campanhas já processadas. |
-| PWA-05 | Capturar tráfego após carregar a interface e enviar/receber mensagens. | Eventos de mensagem trafegam do navegador diretamente aos relays; corpo, conteúdo, senha e chave privada não são enviados ao GitHub Pages, a funções de host ou a terceiros. |
-| PWA-06 | Desligar o relay principal e manter outro relay disponível. | Mensagens continuam sendo enviadas/recebidas pelo relay restante; a interface mostra a falha sem declarar perda total da rede. |
-| PWA-07 | Abrir a PWA sem o host de publicação depois que os arquivos estiverem em cache. | O shell local abre e explica que a rede pode estar indisponível; sincronização de mensagens só acontece quando há conexão com relay. |
-| PWA-08 | Abrir a aplicação com a rede externa de código bloqueada, mantendo acesso aos relays configurados. | App continua funcional sem carregar módulos ou atualizar código a partir de origem externa; requests aos relays continuam possíveis. |
-| PWA-09 | Atualizar a versão hospedada a partir de release/commit revisado. | Atualização não apaga identidade, recuperação, configurações ou dados locais; hash e versão do bundle correspondem ao artefato aprovado. |
+**Fronteira privada obrigatória:** pontes genéricas não carregam mensagens de A para B através de terceiros. O envio NIP-17 usa a lista inbox assinada de cada destinatário. A ponte de B pode replicar o próprio envelope cifrado apenas para os inboxes de B; a de A faz o equivalente para A. Não habilitar encaminhamento de envelopes alheios para conseguir passar o teste de várias camadas. Se todos os inboxes do destinatário estiverem inacessíveis, a UI mostra indisponibilidade; o laboratório não inventa um roteador privado.
 
-**Matriz mínima de navegadores:** Chrome Android, Safari iOS, Firefox Android ou desktop, Chrome/Edge desktop e Safari macOS. Registrar separadamente “site funciona” e “instalação PWA disponível”.
+### 5.3 Relógio, carga e comparações
 
-## 5. Fase B — Identidade, senha e sessão local
+Usar seed explícita para geração de cenários e sequência de falhas. Aleatoriedade de teste pode ser determinística apenas nas fixtures/harness; geração real de chaves, nonces e criptografia do produto conserva sua fonte segura. Nunca introduzir chave fixa ou nonce reutilizado no runtime do app para tornar um teste repetível.
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| IDN-01 | Criar duas identidades usando a mesma senha e o mesmo nome de perfil. | Cada identidade tem chave aleatória independente; nome e senha não determinam a chave privada. |
-| IDN-02 | Inspecionar rede e armazenamento durante criação, desbloqueio e uso da conta. | Senha e chave privada nunca são enviadas a Pages, relays, analytics ou terceiros; no navegador, a chave persistida fica cifrada. |
-| IDN-03 | Desbloquear com senha errada e depois com senha correta. | Senha errada não revela nem altera a chave; senha correta restaura a mesma chave pública e identidade. |
-| IDN-04 | Fechar e reabrir a PWA no mesmo navegador com “continuar conectado” habilitado. | A identidade persiste e a sessão segue a opção local; a senha não fica salva em texto puro e o usuário pode bloquear manualmente. |
-| IDN-05 | Bloquear a sessão manualmente e após inatividade. | Operações de assinatura deixam de funcionar até desbloqueio; conversa local não expõe material secreto. |
-| IDN-06 | Restaurar identidade em outro navegador/dispositivo com o segredo de recuperação. | A chave pública e o acesso à identidade são restaurados corretamente; senha e segredo de recuperação não são transmitidos a serviço central. |
-| IDN-07 | Perder senha e segredo de recuperação e tentar redefinir pela interface. | O app explica que não existe recuperação central; não cria outra chave silenciosamente nem afirma ter restaurado a identidade antiga. |
-| IDN-08 | Exportar/importar segredo de recuperação, quando suportado. | Avisos de risco são claros; segredo aparece apenas por ação explícita, não vai para clipboard ou logs sem consentimento. |
+Separar relógio lógico injetável no harness de duração de relógio real. Expiração, rate limit e reorganização podem ter tempo controlado em testes específicos; o ensaio de 24 horas mede 86.400 segundos reais e não aceita avanço artificial do relógio.
 
-## 6. Fase C — Mensagens e relays
+Corpus mínimo: 100 notas públicas distintas, 50 mensagens por direção, 10 ofertas por moeda e 10 campanhas por moeda. Na carga normal, respeitar o menor limite de eventos/bytes de cada ligação; enviar as notas a até 30 eventos/minuto e executar fases separadas. Acima do limite, o resultado esperado é a contenção declarada, não entrega total. Para cada corpus, reconciliar IDs, autores, destinatários, valores atômicos, ACKs válidos, eventos consultáveis e aparições na UI.
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| MSG-01 | A envia uma mensagem privada cifrada para B por dois relays. | B consegue ler; A mantém a cópia prevista pelo protocolo; C e os relays não conseguem ler o texto. |
-| MSG-02 | B fica offline; A envia mensagem; B volta a conectar. | B recupera a mensagem cifrada de pelo menos um relay disponível. |
-| MSG-03 | Um relay aceita o evento e outro está indisponível. | O app registra a aceitação parcial, tenta novamente sem duplicar a mensagem e sincroniza ao reconectar. |
-| MSG-04 | O mesmo evento chega por múltiplos relays e é recebido novamente após reconexão. | O cliente deduplica por ID do evento e mostra uma única mensagem. |
-| MSG-05 | Alterar conteúdo, assinatura, destinatário ou envelope de um evento de teste. | Evento inválido é rejeitado; não aparece como mensagem confiável. |
-| MSG-06 | Inspecionar requests, logs do cliente, logs do relay e logs da hospedagem. | Chaves privadas e texto em claro não aparecem em tráfego para servidores ou logs. |
-| MSG-07 | Suspender o navegador móvel, apagar a conexão e reabrir o PWA. | O app reconecta e sincroniza; não afirma que o celular manteve um node ativo enquanto suspenso. |
-| MSG-08 | Reiniciar o relay de PC após interrupção de energia ou rede. | Serviço retorna, restaura estado e volta a aceitar conexões sem corromper eventos ou duplicar entrega. |
+## 6. Casos obrigatórios por gate
 
-**Critério de entrega do MVP:** com remetente e destinatário online e pelo menos um relay escolhido disponível, a mensagem chega uma vez; com destinatário offline, a mensagem é recuperada na próxima sincronização, conforme as regras de retenção anunciadas pelo relay.
+### G00 — Preparação, isolamento e evidência
 
-## 7. Fase D — Nodes e disponibilidade
+| Caso | Procedimento e aprovação |
+|---|---|
+| G00-01 | Registrar fontes de requisitos, commit, diff, inventário de ferramentas, hashes, sistema, limites, portas e topologia. Falta de dependência é explícita e impede iniciar o perfil afetado. |
+| G00-02 | Aplicar isolamento de laboratório; provar bloqueio de egress TCP/DNS/IPv4/IPv6 e proxies, mantendo loopback/LAN de teste. Testar também browser, relays, bridges, RPCs e filhos. |
+| G00-03 | Inicializar dois Geode reais, depois os sete relays isolados; verificar prontidão, bancos distintos, permissões privadas e encerramento seguro. Porta ocupada/timeout nunca ativa fallback público. |
+| G00-04 | Interromper um teste propositalmente. Relatório fica BLOCKED, exit não zero, filhos encerrados, evidência sanitizada preservada e dados reais intactos. |
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| NOD-01 | PC relay executa continuamente durante 24 horas. | Mantém serviço e dados, registra reinícios e recupera conexões; não consome recursos acima dos limites definidos para o hardware de referência. |
-| NOD-02 | Interromper internet, energia e conexão WebSocket, uma de cada vez. | O node sinaliza indisponibilidade, reconecta com espera progressiva e não perde o estado confirmado. |
-| NOD-03 | Desligar um relay escolhido pelo usuário. | Cliente usa outros relays e permite remover/substituir o relay indisponível. |
-| NOD-04 | Encerrar o PWA no celular e deixar a tela apagada. | A rede continua disponível por relays de PC; a aplicação não promete serviço móvel contínuo. |
-| NOD-05 | Reiniciar o PC durante processamento de campanha ou mensagem. | Operação retomada é idempotente; não publica anúncio duas vezes nem repete pagamento/reembolso. |
-| NOD-06 | Verificar política de retenção, disco cheio e evento expirado. | Node aplica limites declarados, sinaliza armazenamento insuficiente e não apaga conteúdo fora da política configurada. |
+### G01 — Regressão existente
 
-## 8. Fase E — Campanhas e apresentação de anúncios
+| Caso | Procedimento e aprovação |
+|---|---|
+| G01-01 | Executar as 12 suítes de run-smoke.sh dentro do isolamento. Conferir individualmente resultado, código de saída e o número de suítes; validar casos negativos. |
+| G01-02 | Executar integração entre dois relays reais e integração nativa do launcher. Verificar ACK positivo, consulta por IDs e persistência exata após reinício, não só contagem total. Ampliar o teste existente se só comparar contagens. |
+| G01-03 | Demonstrar sensibilidade dos testes: adulterar apenas fixtures isoladas de assinatura, bundle/hash, preço atômico e backup; cada caso deve falhar pelo motivo previsto. Restaurar fixtures sem editar esperado ou desativar checks. |
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| AD-01 | Anunciante publica oferta assinada com ID único, criativo, link, valor raw e expiração. | Node valida assinatura, campos e prazo antes de aceitar. |
-| AD-02 | Node recusa conteúdo, oferta abaixo da política local ou campanha expirada. | Nenhum pagamento é solicitado, nenhum anúncio aparece e o motivo é registrado de forma legível. |
-| AD-03 | Node aceita uma campanha. | Node publica aceite assinado, endereço exclusivo e prazo; anunciante consegue verificar que o aceite veio daquele node. |
-| AD-04 | Pagamento exato e confirmado chega dentro do prazo. | Campanha é publicada uma vez como cartão patrocinado separado, com prazo e node identificáveis. |
-| AD-05 | Pagamento não chega antes do prazo. | Aceite expira e campanha não é publicada. |
-| AD-06 | Chega pagamento atrasado, abaixo, acima ou em endereço de outra campanha. | Não publica; devolve o valor recebido por nova transferência e registra o status para retomada idempotente. |
-| AD-07 | Repetir notificação do mesmo bloco de pagamento ou reiniciar o node durante o fluxo. | Node não publica duas vezes nem envia reembolso duplicado. |
-| AD-08 | Campanha inclui JavaScript, pixel, imagem remota rastreadora, EXIF ou arquivo inválido. | Node rejeita ou normaliza o arquivo; cliente não carrega trackers externos automaticamente. |
-| AD-09 | Usuário abre a campanha sem clicar no link e depois toca explicitamente no link. | Nenhum clique é enviado ao Property; link só abre por ação explícita e aparece identificado como patrocinado. |
-| AD-10 | Verificar publicidade junto a mensagens privadas. | Anúncio aparece separado; evento cifrado/assinado da conversa permanece inalterado. |
-| AD-11 | Usuário altera preferência de publicidade e escolhe outro node. | Preferência é respeitada localmente; a seleção não exige perfil centralizado. |
-| AD-12 | Abrir Hangout em aparelho sem habilitar campanhas; depois habilitar e carregar eventos. | Padrão permanece desligado; consulta kind 30078 só ocorre com opt-in, mostra campanha separada e usa texto/link/imagem sob validação. |
-| AD-13 | Repetir campanha, bloquear node e inspecionar eventos enviados após abrir o link. | Limite de uma exposição local por campanha em 24h e bloqueio por node funcionam; cliente não publica eventos de clique/visualização. O destino HTTPS ainda recebe a navegação normal após clique explícito. |
-| AD-14 | Mostrar campanha com `payment_block_hash` declarado, mas sem confirmação Nano independente. | UI identifica que o cliente não verificou o pagamento; nenhuma campanha pode ser anunciada como pagamento verificado até implementar e testar a engine Nano. |
+### G02 — Pacote autônomo, PWA e migração
 
-**Regra de exposição escolhida para o MVP:** node vende uma colocação por período, não impressões ou cliques. O leitor atual aplica um limite local de repetição da mesma campanha; esse histórico não é enviado ao anunciante nem ao node. O campo de bloco Nano é apenas uma declaração assinada no estado atual, não uma prova de pagamento conferida pelo cliente.
+| Caso | Procedimento e aprovação |
+|---|---|
+| G02-01 | Inventariar código reaproveitado de Amethyst/Geode, bibliotecas locais e licenças; conferir commits, hashes e ausência de dependências dinâmicas no runtime. Rebuild offline quando toolchain local completo; registrar incompatibilidade web sem declarar Compose recompilado. |
+| G02-02 | Abrir bundle limpo em localhost e /property/ com egress bloqueado. Todos os scripts, estilos, fontes, workers e manifesto são locais; nenhuma tentativa de CDN, analytics ou execução remota. Repetir com cache vazio. |
+| G02-03 | Instalar service worker, armazenar identidade e dados sintéticos; encerrar H e cortar relays. Shell reabre, identidade permanece, estado desconectado é claro e não afirma entrega. Religar só os relays: app em cache comunica diretamente sem H. |
+| G02-04 | Simular atualização completa, atualização interrompida e artefato misturado. Sem perda de chave, conversas ou preferências; versão do shell é consistente ou retorna erro recuperável. Caches de outros apps permanecem intactos. |
+| G02-05 | Importar backups legados, abrir banco legado e testar caminhos antigo/novo na mesma origem local; mesma identidade preservada. Testar senha errada, backup alterado e armazenamento indisponível sem criação silenciosa de outra conta. |
+| G02-06 | Testar TLS/WSS válido e inválido, CSP e conteúdo malicioso. Sem desativar validação TLS, aceitar script remoto ou mudar política de produção para acomodar o harness. |
 
-## 9. Fase F — XNO, XMR e precisão financeira
+### G03 — Identidade, senha, recuperação e contatos
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| XNO-01 | Converter valores entre XNO e raw, incluindo 1 raw e 1 XNO. | Conversão exata usando inteiros; nenhuma operação monetária usa ponto flutuante. A referência é 1 XNO = 10³⁰ raw. |
-| XNO-02 | Criar duas ofertas para nodes/campanhas diferentes. | Cada campanha recebe endereço exclusivo; pagamentos não são associados só por horário ou valor. |
-| XNO-03 | Verificar transferência ainda não confirmada/recebível. | Anúncio não é publicado antes da confirmação e do recebimento processado pelo node. |
-| XNO-04 | Aceitar, receber e publicar campanha paga. | Valor, bloco de pagamento, campanha e aceite são reconciliados exatamente. |
-| XNO-05 | Fazer reembolso de pagamento atrasado ou incompatível. | Devolução é uma nova transação ao endereço de origem, uma única vez, com valor raw correto. |
-| XNO-06 | Interromper rede durante recebimento ou devolução. | Operação permanece pendente, é retomada após reconexão e não perde nem duplica fundos. |
-| XNO-07 | Verificar separação de carteiras e chaves. | Chave Nano do node não é igual à chave Nostr, não está na PWA e não aparece em logs, Pages ou relays. |
-| XNO-08 | Inspecionar a interface antes do pagamento. | Usuário vê claramente valor, unidade, endereço/campanha, validade e node recebedor antes de autorizar a transferência. |
-| XNO-09 | Auditar a configuração RPC Nano usada pelo node de campanhas. | `enable_control` fica desligado até ser necessário; se habilitado, o endpoint fica em loopback ou tem controle de acesso equivalente fora do node; nenhuma chave, seed ou senha aparece na PWA, relay ou logs. |
+| Caso | Procedimento e aprovação |
+|---|---|
+| G03-01 | Pela UI, criar A e B com mesmo nome/senha de teste em contextos separados. Chaves diferentes; cofre cifrado; rede/armazenamento/logs não expõem senha ou chave privada. |
+| G03-02 | Senha errada não altera a conta; correta desbloqueia a mesma identidade. Testar continuar conectado ligado/desligado, reabrir navegador, bloqueio manual e inatividade. Depois de bloqueado não há assinatura até desbloquear. |
+| G03-03 | Exportar backup cifrado pela UI e restaurar em contexto limpo; conferir mesma chave pública e acesso à conversa. Perda de senha/recuperação não oferece reset central nem substitui identidade silenciosamente. |
+| G03-04 | A obtém contato de B pelo perfil/compartilhamento e pelo botão de autoria do Hangout; testa npub, nprofile com hints locais e hex válidos. Confirmar destinatário e nome local antes de enviar, sem digitar chave privada. Não exigir registro GitHub nem servidor central. |
+| G03-05 | Reproduzir a entrada coercaodobem no campo de nova conversa; testar vazio, chave truncada, nsec, contato próprio e nomes iguais. Erro compreensível em português, sem stack/Bech32 bruto; orienta obter o contato correto e não envia a identidade errada. Nome simples não é convertido silenciosamente em chave nem tratado como único global. Se busca por nome não existir, a UI explica os formatos aceitos e oferece o caminho disponível de compartilhar/selecionar contato. |
+| G03-06 | Capturar requests e perfis de armazenamento antes/depois de cada ação; reconciliação automática comprova ausência de segredo, endpoint de login/recuperação central e perda de dados durante atualização. Capturas preservadas devem estar sanitizadas. |
 
-O valor pago e os endereços Nano podem ser observados na ledger pública; validar que o produto explica isso e não reutiliza endereço pessoal do operador. Para XMR, não aplicar automaticamente a devolução à origem da tabela XNO; seguir os casos XMR acima. A documentação oficial do node Nano recomenda limitar RPCs de controle a IPs locais/loopback, pois essas chamadas podem acessar fundos da carteira e parar o node: [RPC Protocol](https://docs.nano.org/commands/rpc-protocol/) e [Node Configuration](https://docs.nano.org/running-a-node/configuration/).
+### G04 — Mensagens reais de ponta a ponta
 
-## 10. Fase G — Segurança, privacidade e abuso
+| Caso | Procedimento e aprovação |
+|---|---|
+| G04-01 | Pela UI, publicar listas kind 10050 de A/B em R0; validar assinatura e selecionar versão válida mais recente. Lista falsa, antiga, ambígua ou sem relays válidos não autoriza destino indevido. |
+| G04-02 | A envia a B; B responde. Conferir textos na UI e nos destinatários, cópias previstas do remetente e persistência cifrada nos inboxes corretos. C com outra chave não decifra; H não recebe corpo, senha ou chave. |
+| G04-03 | Fechar o contexto B, enviar A->B, reabrir B e sincronizar. Mensagem aparece uma vez; repetição por dois relays/reconexão não duplica. Retenção do relay de teste é conhecida. |
+| G04-04 | Desligar um inbox de B, depois todos; testar ACK negativo, falso ACK sem persistência e reconexão. UI distingue envio aceito por relay, falha/parcial e leitura; não anuncia leitura só por ACK. Consulta independente detecta relay que mentiu. |
+| G04-05 | Faltar kind 10050, adulterar destinatário/assinatura/envelope, manipular timestamp e repetir IDs. Não envia por fallback público; rejeita inválidos; nenhum terceiro recebe plaintext. |
+| G04-06 | Executar o corpus nas duas direções e reconciliar cada ID/envelope/conversa no browser e no relay. Em fluxo normal, zero perdas e uma aparição por mensagem na UI. Capturar limites de metadados visíveis sem afirmar anonimato total. |
 
-- **Criptografia:** teste negativo de acesso por terceiro, alteração de evento, chave errada e envelope inválido.
-- **Segredos:** buscas automatizadas e revisão manual não encontram seeds, chaves privadas ou texto de mensagem em bundle, logs, analytics ou chamadas ao GitHub Pages.
-- **Origem web:** testar atualização, espelho e CSP; documentar que o domínio que entrega JavaScript faz parte da confiança do cliente.
-- **Publicidade:** sanitizar imagens; permitir apenas links HTTPS; impedir URLs javascript, data e file; não carregar recursos de terceiros sem ação explícita.
-- **Abuso de oferta:** limitar frequência por identidade/campanha, validar tamanhos e impor prazo máximo de armazenamento de campanhas.
-- **Fraude financeira:** validar assinatura do anunciante, aceitar apenas pagamento correspondente ao endereço e oferta aceitos, deduplicar por hash de bloco e registrar transições de estado.
-- **Observabilidade:** não coletar clique, leitura de mensagem, lista de contatos ou texto privado. Métricas operacionais locais devem ser agregadas e configuráveis.
+### G05 — Vários layers/relays e pontes
 
-## 11. Fase H — Usabilidade e desempenho
+| Caso | Procedimento e aprovação |
+|---|---|
+| G05-01 | Na cadeia R1->R2->R3->R4, trafegar o corpus público usando três pontes do módulo real. B recebe apenas por R4; assinaturas, IDs e conteúdo permanecem idênticos. Contadores/ACLs comprovam cada salto e ausência de atalho. |
+| G05-02 | Parar P23: evento novo deixa de alcançar R4. Restaurar e usar a janela de consulta/replay declarada para sincronizar eventos ainda elegíveis. Evento expirado não é inventado nem retransmitido fora da política. |
+| G05-03 | Acrescentar caminho redundante em diamante, depois ciclo e estrela. Deduplicação garante uma aparição na UI; não há amplificação ilimitada. Desligar um caminho mantém entrega pelo outro, quando a topologia ainda conecta origem e destino. |
+| G05-04 | Particionar grupos de relays e uni-los novamente; reiniciar uma ponte, receber eventos em ordem diferente e reconsultar. Reconciliar apenas o que a política de idade/retenção permite; perdas fora dessa política ficam explícitas. |
+| G05-05 | Injetar envelope NIP-17 de B em R1: P12/P23/P34 e identidade C recusam encaminhá-lo. Em seguida usar a ponte de B, com B como identidade local, entre os próprios inboxes de B; só ela encaminha seu envelope cifrado aos destinos permitidos. A cópia de A segue a lista de A. |
+| G05-06 | Testar ponte desligada/ligada, exclusão da origem, deduplicação, eventos inválidos/antigos/futuros e limites de 60 eventos/minuto e 2.000.000 bytes/minuto. Bytes de UTF-8 contam cada destino; excesso tem contenção observável. |
+| G05-07 | Suspender/encerrar contexto móvel simulado e parar sua ponte. Relays de PC continuam disponíveis; reabrir retoma sincronização possível. Não aprovar serviço móvel contínuo a partir de contexto desktop emulado. |
 
-- Completar criação/recuperação segura de identidade, escolha de relays, envio de mensagem e troca de node sem terminal.
-- Confirmar leitura em tela pequena, teclado, zoom, navegação por teclado e rótulos para leitor de tela.
-- Testar rede lenta, pacote de dados interrompido, sessão expirada e relay com latência alta.
-- Medir tamanho inicial da PWA, tempo até interface utilizável, consumo de memória e dados durante sincronização.
-- Definir metas numéricas de desempenho antes do beta público; não aceitar resultados de uma única rede/dispositivo como representativos.
+### G06 — Hangout e marketplace inicial
 
-## 12. Fase I — Hangout e marketplace
+| Caso | Procedimento e aprovação |
+|---|---|
+| G06-01 | A publica nota kind 1; B descobre em outro relay via cadeia pública, identifica origem e autoria e inicia conversa pela UI. Feed público permanece identificado como público; não oferece sala privada inexistente. |
+| G06-02 | Publicar, descobrir e editar ofertas BTC/XMR/XNO pela UI; round-trip em Geode real preserva autoria, d, moeda e inteiro price_atomic. Testar 1 satoshi, 1 piconero, 1 raw e fronteiras documentadas sem Number/arredondamento no valor exato. |
+| G06-03 | Retirar oferta e receber cópia antiga por outro relay: não reaparece. Pedido de retirada de outro autor ou timestamp inválido não remove oferta legítima. |
+| G06-04 | Testar moeda desconhecida, precisão excessiva, overflow, listagem malformada, expiração e URLs/imagens inseguras. Nada executa código, busca tracker ou troca moeda/unidade silenciosamente. |
+| G06-05 | Iniciar contato com vendedor sem checkout: destinatário correto, preço/termos preservados, nenhuma cobrança ou compra fictícia. Registrar limite do draft NIP-15; não declarar interoperabilidade além do formato testado. |
 
-Executar após fechar as histórias de usuário e o protocolo de cada fluxo. A cobertura abaixo testa a primeira etapa de descoberta e publicação; não presume custódia ou pagamento de compras.
+### G07 — Engine real de campanhas e privacidade
 
-| ID | Cenário | Critério de aprovação |
-|---|---|---|
-| HNG-01 | Publicar e descobrir notas públicas kind 1 no Hangout. | Assinatura e autoria são verificadas; eventos duplicados são deduplicados e a interface mostra os relays dos quais cada nota veio. |
-| HNG-02 | Abrir uma nota pública e iniciar conversa com a autoria. | Conteúdo público é identificado como público; o botão inicia uma conversa NIP-17 sem tornar a nota privada. |
-| HNG-03 | Procurar mensagens privadas em espaços públicos/grupos. | A UI informa que Hangout é feed público; grupos e salas privadas não são oferecidos até existir protocolo e teste de criptografia/grupo. |
-| HNG-04 | Desligar um relay que fornece conteúdo de um Hangout. | Outro relay disponível permite recuperar eventos válidos; não há perda indevida de dados locais. |
-| MKT-01 | Publicar e descobrir listagem compatível com NIP-15 a partir do perfil do vendedor. | Evento e autoria são validados; preço, moeda e termos são mostrados como publicados, sem conversão ou alteração silenciosa. |
-| MKT-02 | Editar, retirar ou receber cópia antiga de uma listagem. | Edição conserva o `d` do produto addressable; retirada publica um NIP-09 assinado pelo autor; o cliente valida autoria/tempo e oculta a oferta retirada mesmo se um relay servir cópia antiga. |
-| MKT-03 | Processar listagem malformada, expirada ou com link/arquivo inseguro. | Conteúdo inválido é ocultado ou sinalizado; nenhum recurso remoto de rastreamento é carregado automaticamente. |
-| MKT-04 | Iniciar contato sobre uma oferta sem função de pagamento/custódia implementada. | O cliente não simula compra, não recebe fundos e deixa claro quais passos ocorrem fora do Property. |
-| MKT-05 | Verificar telemetria de busca e navegação no marketplace. | Não são enviados ao anunciante ou a serviço central cliques, leituras, lista de contatos ou histórico individual. |
+| Caso | Procedimento e aprovação |
+|---|---|
+| G07-01 | D envia proposta assinada a N1/N2. A engine do node valida conteúdo, valor, moeda, prazo e política. N1 aceita, N2 recusa independentemente; decisões persistem sem autoridade central. Engine ausente resulta FAIL. |
+| G07-02 | Recusa não solicita pagamento nem publica anúncio. Aceite assinado vincula campanha, moeda, montante, endereço exclusivo, prazo e condições de reembolso; alteração posterior invalida o acordo. |
+| G07-03 | Usar simulador determinístico de ledger apenas para testar a máquina de estados real: oferta->aceite->aguarda pagamento->confirmado->publicado->expirado; caminhos de recusa, pagamento inválido e devolução. Sem mockar a própria engine. Aprovação aqui não substitui G08. |
+| G07-04 | Duplicar notificações, atrasar pagamento, alterar moeda/valor/endereço, reiniciar em cada transição. Publicação e reembolso idempotentes, sem ativação por txid declarado, crédito duplicado ou perda de conciliação. |
+| G07-05 | Opt-in desligado por padrão, identificação de patrocínio, bloqueio de node e limite local de exposição funcionam. Criativo fica separado de feed e mensagens; envelope cifrado permanece inalterado. |
+| G07-06 | Inspecionar tráfego ao consultar, exibir e clicar. Sem pixel, script remoto ou telemetria de leitura/clique/perfil. Link só abre por ação explícita em destino local de teste; tráfego normal da navegação não é ocultado no relatório. |
+| G07-07 | Trocar de N1 para N2 e comparar políticas de exposição/retenção. Preferências locais respeitadas; ausência de anunciante/receita não impede comunicação básica nem cria cobrança oculta. |
 
-**Gate de Hangout/marketplace:** os casos da Fase I passam antes de anunciar esses módulos como prontos. Pagamentos ou custódia de compras continuam fora do escopo até terem especificação e testes próprios.
+### G08 — Liquidação BTC/XMR/XNO inteiramente local
 
-## 13. Critérios de saída
+Preparar binários fixados e carteiras descartáveis. Usar Bitcoin regtest, Monero em rede privada/regtest suportada pela versão e Nano em rede local privada com genesis de teste. Desabilitar seeds, descoberta e peers externos. Não usar signet, stagenet ou testnet pública para passar este gate. Registrar comandos compatíveis com os binários instalados; não inventar flags ou tratar mock como blockchain.
 
-O MVP só passa para beta quando:
+| Caso | Procedimento e aprovação |
+|---|---|
+| G08-01 | Para cada moeda, a engine e o adaptador real recebem pagamento no endereço/subendereço exclusivo. A carteira/node local fornece prova de valor e estado; só então publicar campanha. Conferir oferta, endereço, inteiro atômico, transação, confirmação e uma publicação. |
+| G08-02 | BTC: saída/endereço errado, valor errado, pendente em mempool, conflito/substituição, confirmação e reorganização na cadeia privada. Gate de confirmação é explícito; ausência de transferência confirmada não ativa campanha. |
+| G08-03 | XMR: subendereço, carteira atrasada, confirmações/desbloqueio, reorganização, taxas e recebimento duplicado. Endereço de origem não é presumido; hash isolado não aprova. |
+| G08-04 | XNO: 1 raw e fronteiras, pagamento pendente, recebimento processado e confirmação; repetição/notificação fora de ordem não credita duas vezes. Carteira Nostr e Nano são independentes. |
+| G08-05 | Nas três moedas, testar reembolso por acordo autenticado, taxas/valor líquido e mínimo, falha RPC antes/depois do broadcast e retomada após crash. Conferir ledger e estado antes de repetir; no máximo um débito financeiro válido. Nano pode testar devolução à conta validada; BTC/XMR não inferem endereço de reembolso. |
+| G08-06 | Saldo insuficiente, moeda errada, pagamento atrasado e reorganização deixam estado conciliável, sem sucesso fictício. Conservação contábil por carteira: saldo inicial + créditos - débitos - taxas = saldo final, distinguindo pendente/bloqueado e disponível. |
+| G08-07 | RPC autenticado apenas no laboratório, sem credencial na PWA/eventos/logs, limites de saldo/ação e ausência de mainnet. Nenhuma semente sai do host do operador. Desligar ledger real deve impedir confirmação, provando que o adaptador não usa sucesso constante. |
 
-1. Mensagens privadas permanecem ilegíveis para terceiros e relays; eventos inválidos são rejeitados.
-2. O navegador comunica mensagens diretamente com relays e mantém sincronização com mais de um relay.
-3. A PWA funciona como site mesmo quando a instalação não é oferecida pelo navegador.
-4. Nodes de PC recuperam serviço após falha; o PWA móvel não promete funcionamento persistente suspenso.
-5. Campanhas recusadas não geram pagamento; campanhas aceitas só são exibidas após o pagamento correto.
-6. Conversão raw, identificação de campanha, expiração e reembolso passam os testes sem arredondamento ou duplicação.
-7. Anúncios ficam separados das mensagens; não há pixel, clique ou leitura de conteúdo privado enviado como telemetria.
-8. Seeds e chaves de carteira não aparecem no frontend hospedado, nos logs ou nos relays.
-9. Ensaio de 24 horas do relay de PC conclui sem perda de dados e com recuperação documentada.
-10. Reuso do Amethyst tem commit, escopo, dependências, licenças e atribuições registrados; código que não pode rodar no browser foi separado sem reimplementar protocolo existente sem justificativa.
-11. O pacote publicado corresponde ao commit revisado, funciona sem baixar código executável externo e conecta-se diretamente aos relays.
-12. A conta permanece disponível no mesmo navegador sem persistir senha em texto puro; recuperação, bloqueio e perda irrecuperável são explicados e testados.
-13. Site institucional e publicação pública só avançam após o gate de lançamento; a versão do GitHub Pages corresponde a release identificável.
+Os parâmetros de confirmações, taxas, mínimos e retenção precisam ser fixados no manifesto antes dos casos. Só parâmetros de testabilidade podem ser menores no laboratório; relatar a diferença para produção. Um mock de saldo ou txid fictício não substitui nenhum caso de G08.
 
-## 14. Registro dos resultados
+### G09 — Falhas, abuso, persistência e migração do node
 
-Para cada caso, registrar:
+| Caso | Procedimento e aprovação |
+|---|---|
+| G09-01 | Encerrar abruptamente apenas os processos de teste durante escrita, envio, edição e campanha. Reiniciar com o mesmo banco; dados confirmados permanecem, nenhuma operação financeira/publicação é repetida indevidamente. |
+| G09-02 | Proxy local de falhas injeta latência, queda, reordenação, desconexão, frames inválidos, ACK falso/negativo e relay indisponível. Cliente sinaliza estado real, recupera conexões e limita retries/recursos. |
+| G09-03 | Limitar disco/retensão em volume temporário e testar banco ocupado/config inválida. Node informa a falha, preserva dados conforme política, não toca volume do usuário nem informa persistência sem gravação. |
+| G09-04 | Receber eventos duplicados, grandes, inválidos e flood acima da cota. Rate limits de eventos/bytes e memória funcionam sem travar UI; corpus normal posterior continua utilizável. |
+| G09-05 | Testar PROPERTY_RELAY_* e aliases legados, precedência e diretórios antigos com dados sintéticos. Runtime adulterado/segmento ausente impede início; nunca baixa substituto da internet. |
+| G09-06 | Retirar H, um relay, uma ponte e um node de campanha separadamente. Só as rotas/funcionalidades dependentes falham; rede remanescente funciona e conteúdo privado não escapa por fallback. |
 
-- ID e versão testada;
-- ambiente, relay, carteira de teste, dispositivo e navegador;
-- passos executados;
-- resultado esperado e observado;
-- evidência sanitizada;
-- status: aprovado, reprovado, bloqueado ou não executado;
-- defeito associado, severidade e reteste.
+### G10 — Jornadas completas e critérios de experiência
 
-Este arquivo é o plano. Ele não confirma que as funcionalidades já existem ou que os testes passaram.
+Cada jornada usa o app real no navegador, por controles visíveis; chamadas diretas às funções internas só apoiam as asserções, sem substituir cliques, formulários e navegação. Proibido mockar backend/relay nos casos ponta a ponta. Capturar console, tráfego sanitizado e telas em pontos de aceitação.
 
-## Extensão BTC e plataformas de computador
+| Caso | Procedimento e aprovação |
+|---|---|
+| G10-01 | Contextos novos: criar A/B, configurar relays locais, publicar inboxes, compartilhar/selecionar contato, conversar e responder. Nenhum terminal para o usuário do app, nenhuma chave privada solicitada no fluxo cotidiano e instruções claras para identificar destinatário. |
+| G10-02 | B ausente, A envia, um inbox cai, H cai, B reabre shell em cache e recupera. Uma aparição de cada mensagem; estados de rede coerentes e nenhuma dependência central oculta. |
+| G10-03 | Pela UI: Hangout->autoria->conversa; marketplace->publicar->editar->contatar->retirar; campanha->opt-in->exibir->bloquear node. Validar efeitos nos relays/engine, não apenas existência dos botões. |
+| G10-04 | Backup/recuperação em perfil limpo, sessão, bloqueio e migração com dados. Voltar à identidade correta sem apagar origem nem expor segredo em captura. |
+| G10-05 | Viewports 360x800, 390x844, 768x1024 e 1440x900; teclado, zoom 200%, foco visível, nomes acessíveis e avisos em português. Sem controle essencial oculto/inacessível ou rolagem horizontal involuntária. Tamanho móvel emulado não equivale a instalação iOS/Android. |
+| G10-06 | Registrar bytes iniciais do bundle, CPU/RSS/disco e latência. Metas locais deste plano: shell utilizável em até 3 s; p95 de mensagem direta <=5 s; p95 de nota em três pontes <=10 s; retomada de conexão <=30 s após restaurar rota. Medir pelo menos 50 mensagens e 100 notas, após aquecimento, respeitando cotas. Não extrapolar para internet/4G. |
 
-- BTC-01: converter 1 BTC/1 satoshi e limite de 21 milhões; rejeitar mais de 8 casas, expoente, negativo e overflow.
-- BTC-02: publicar/ler oferta e campanha BTC sem reinterpretar Nano raw ou Monero piconero.
-- BTC-03 (pendente): regtest/signet, carteira local, output/endereço exclusivo, mempool, confirmações, conflitos/substituição, reorganização e reembolso idempotente com taxas explícitas. Nenhuma liquidação ativada.
-- OS-01: Linux x86_64, Windows x64 e macOS arm64 executam `native-relay-integration.mjs` no CI com o Java do pacote, sem depender de Java instalado.
-- OS-02: validar caminhos com espaços, criar SQLite persistente e conferir os mesmos eventos após reiniciar.
-- OS-03: comparar cada segmento, hash do ZIP, hash dos JARs comuns e pin do launcher; pacote adulterado não pode executar.
-- OS-04: PWA em navegadores Windows/macOS/Linux/Android/iOS; separar ensaio automatizado desktop de teste físico de instalação/suspensão móvel.
+Se a ferramenta não fornecer uma métrica, instrumentar o harness ou registrar BLOCKED; nunca preencher com estimativa. Os limites acima são critérios de aceitação propostos por este plano, não resultados obtidos. Mudança exige justificativa técnica anterior ao reteste, nunca ajuste silencioso ao resultado.
 
-A inspeção dos JARs atuais identificou SQLite nativo macOS arm64, Windows x64 e Linux x64/arm64, mas não macOS Intel. Portanto não declarar relay Mac Intel suportado apenas porque existe JRE Intel.
+### G11 — Repetibilidade, 24 horas e fechamento
+
+| Caso | Procedimento e aprovação |
+|---|---|
+| G11-01 | Repetir o conjunto funcional curto duas vezes com a mesma seed em laboratórios limpos e uma terceira vez com seed diferente. Mesmas invariantes e contagens esperadas; diferenças de chaves/IDs criptográficos não são comparadas como identidade entre execuções. |
+| G11-02 | Repetir montagem/hash dos runtimes e empacotamento da PWA offline. Build do código reaproveitado usa ferramentas/dependências locais inventariadas; registrar hashes e explicar variações não determinísticas. Falta de toolchain bloqueia a alegação de rebuild reproduzível, sem fingir que hash do binário prova compilação. |
+| G11-03 | Rodar 24 horas reais com ao menos três relays, duas pontes e clientes de teste. Probes periódicas de publicação/consulta, persistência, partição e reinícios programados; evidência de início/fim, duração >=86.400 s, perdas dentro da janela declarada, duplicatas na UI e orçamento de recursos. Probe de um único relay ou soak curto não aprova o cenário de rede. |
+| G11-04 | Conciliar corpus, estados financeiros, caches e volumes; auditar egress do início ao fim. Sem inconsistência, perda de evento aceito e retido, operação financeira duplicada ou segredo nos artefatos. |
+| G11-05 | Gerar relatório por gate, lista de defeitos encerrados/abertos, hashes de evidência e comando de reprodução. Ensaios interrompidos/faltantes impedem OFFLINE_FUNCTIONAL_PASS. |
+
+### G12 — Sistemas e navegadores offline
+
+| Caso | Ambiente e aprovação |
+|---|---|
+| G12-01 | Linux x86_64: launcher com runtime incluído, caminho com espaços, permissões, SQLite, corpus, reinício e PWA em Chromium/Firefox locais. Repetir sem Java no PATH do processo. |
+| G12-02 | Windows x64 real ou VM Windows: PowerShell, runtime incluído, caminhos com espaços, persistência/limpeza e PWA Edge/Chrome. Wine, parsing do .ps1 ou runner Linux não aprovam execução nativa. |
+| G12-03 | macOS Apple Silicon real ou VM compatível: launcher, runtime, persistência e PWA Safari/Chrome. WebKit Linux não certifica Safari macOS, nem runner x64 certifica arm64. |
+| G12-04 | Android: navegador no emulador/aparelho de laboratório com rede isolada; identidade, mensagem, recuperação e reconexão após suspensão. Registrar browser/versão e capacidade de instalação observada. |
+| G12-05 | iOS/iPadOS: Safari em simulador disponível em Mac ou aparelho local, sem internet; mesmos fluxos e retomada. Marcar se adicionar à tela inicial/instalação requer aparelho físico e não foi comprovado. |
+| G12-06 | Conferir comportamento quando instalação PWA não é suportada: site segue utilizável e não oferece instrução falsa. Registrar instalação/background físicos como não comprovados quando só houve simulador; não bloquear indevidamente a aprovação funcional do site por ausência de API de instalação no ambiente declarado. |
+
+O pacote e o mesmo conjunto de fixtures devem ser transferidos previamente para os ambientes locais; cada ambiente executa com egress bloqueado e produz relatório próprio. GitHub Actions pode entregar evidência complementar, mas jobs que baixam actions/toolchains não são ensaios offline desta revisão. Se um sistema/navegador não estiver disponível, o caso é BLOCKED e PROPERTY_SCOPE_OFFLINE_PASS não é concedido. A aprovação funcional em simulador não certifica instalação física ou funcionamento permanente em segundo plano.
+
+## 7. O que já existe e o que o executor deve construir
+
+### Comandos existentes, a executar somente dentro do isolamento preparado
+
+Na raiz do checkout:
+
+    bash property/tests/run-smoke.sh
+    bash property/tests/run-bridge-integration.sh 17450 17451
+    node property/tests/native-relay-integration.mjs
+
+Ensaio existente de um relay, útil como diagnóstico e sem equivalência ao G11-03 completo:
+
+    node property/tests/relay-soak.mjs 86400 60 17447
+
+As portas são valores de exemplo; conferir disponibilidade e reservar portas por execução. O launcher deve usar DATA_DIR/CONFIG_DIR temporários, separados dos diretórios reais do usuário.
+
+### Infraestrutura a implementar pelo Luna Max
+
+| Entrega planejada | Contrato mínimo |
+|---|---|
+| Orquestrador offline | Verifica isolamento, ferramentas e dependências; seleciona perfil; aplica timeout; agrega exit codes sem mascarar falha; limpa apenas filhos e diretórios próprios |
+| Manifesto de laboratório | Esquema versionado com seed, commit/diff, hashes, hosts/portas/ACLs, carteiras, topologias, cotas, políticas e metas |
+| Harness de múltiplos relays | Sete Geode reais, bancos separados, pontes reais, proxies de falha e reconciliação por ID; topologias cadeia/diamante/ciclo/estrela |
+| Automação de navegador | Ferramenta/navegadores locais fixados, perfis isolados A/B/C, interações reais e captura sanitizada de rede/console/telas |
+| Laboratório financeiro | Binários e carteiras privados BTC/XMR/XNO, controle de blocos/reorganizações e integração com a engine real |
+| Relatório automatizado | JSON/Markdown por caso/gate, evidências com hash, sinalização de lacunas e resultado final calculado |
+
+Contrato sugerido para o runner novo, **ainda não implementado nesta revisão documental**:
+
+    node property/tests/offline/run-offline.mjs --profile core --manifest /caminho/lab.json
+    node property/tests/offline/run-offline.mjs --profile platforms --manifest /caminho/lab.json
+    node property/tests/offline/run-offline.mjs --profile full --manifest /caminho/lab.json
+
+Antes de anunciar qualquer comando novo como utilizável, o Luna Max deve criar os arquivos, documentar dependências e executá-lo em ambiente limpo. O perfil core cobre G00–G11; platforms executa G12 referenciando um core compatível; full agrega os dois. Ausência de binário, engine ou navegador não vira skip bem-sucedido.
+
+## 8. Evidência e retomada
+
+Diretório de trabalho sugerido: /tmp/property-offline/<run-id>, com permissões privadas. Persistir a versão sanitizada em property/docs/evidence/offline/<run-id>/, revisando tamanho e conteúdo antes de versionar. Dumps brutos, perfis, carteiras, senhas e tráfego não sanitizado não entram no repositório.
+
+Artefatos mínimos:
+
+- manifest.json: schema, run_id, executor Luna Max, versão efetiva de ferramenta/modelo quando disponível, horário, commit/diff, hashes do produto/harness, seed, plataforma, browser e orçamento.
+- isolation.json: regras/allowlist, probes, contadores de egress e configuração do laboratório. Não conter credenciais/proxies pessoais.
+- topology.json: processos, relays, bancos, ligações permitidas, corpus, injeções de falha e timestamps de cada transição.
+- cases.jsonl: um registro final por caso com gate, requisito, comando, início/fim, esperado, observado, status, exit code, motivo e referências a evidências.
+- reconciliation.json: IDs públicos/envelopes e contagens por relay/UI; saldos atômicos sintéticos, taxas e estados financeiros. Sem conteúdo privado/chaves.
+- summary.json e report.md: estado de cada gate, totais de PASS/FAIL/BLOCKED/NOT_RUN, metas medidas, defeitos e resultado final derivado.
+- SHA256SUMS: hashes dos artefatos sanitizados, incluindo capturas necessárias; verificar depois de consolidar o relatório.
+
+Guardar o histórico de tentativa e correção, sem sobrescrever a falha inicial. Campo de observação não substitui uma asserção. Comparar o commit/diff e a configuração em cada retomada: alteração no código invalida ao menos o caso afetado e seus dependentes; qualquer certificação final requer regressão compatível do conjunto completo, incluindo soak da versão candidata final. Não reaproveitar soak de binário anterior como se fosse do novo.
+
+## 9. Rastreabilidade do plano anterior
+
+Todos os casos antigos permanecem consultáveis no histórico. A tabela explicita sua cobertura sem apagar requisitos pendentes; para cada caso individual, o relatório do Luna Max deve apontar o novo caso executado e sua evidência.
+
+| IDs anteriores | Gates sucessores |
+|---|---|
+| SRC-01 a SRC-07 | G00, G02, G11 |
+| PWA-01 a PWA-09 | G02, G04, G09, G10, G12; publicação pública é registro separado |
+| IDN-01 a IDN-08 | G03, G10 |
+| MSG-01 a MSG-08 | G04, G05, G09, G10, G12 |
+| NOD-01 a NOD-06 | G05, G07, G09, G11 |
+| AD-01 a AD-14 | G07, G08, G10 |
+| XNO-01 a XNO-09 | G07, G08 |
+| XMR-01 a XMR-05 | G07, G08 |
+| BTC-01 a BTC-03 | G06, G07, G08 |
+| MONEY-01 a MONEY-04 | G01, G06, G08 |
+| HNG-01 a HNG-04 | G05, G06, G10 |
+| MKT-01 a MKT-05 | G06, G10 |
+| PROP-01 a PROP-05 | G02, G03, G09, G12; deploy é registro separado |
+| OS-01 a OS-04 | G12 |
+| Segurança, privacidade, usabilidade e critérios de saída sem ID | G00, G02, G03, G04, G07, G08, G09, G10, G11 |
+
+## 10. Estado inicial e entrega esperada
+
+O histórico registra 12 suítes locais aprovadas, integração de dois relays, publicação anterior e matriz nativa Linux/Windows/macOS. Esses resultados ajudam a reproduzir o baseline; não aprovam automaticamente isolamento, sete relays, jornadas completas, engine financeira, redes privadas, novo soak ou nova matriz offline.
+
+Lacunas conhecidas no início desta revisão: orquestrador offline completo, harness de sete relays e falhas, jornadas automatizadas de navegador, engine de campanhas/pagamentos, laboratório privado de moedas, 24 horas concluídas e execução offline da matriz inteira. Inventariar novamente antes de executar; uma lacuna pode ter sido corrigida por commit posterior.
+
+O trabalho solicitado nesta revisão é a atualização do plano. Nenhum gate novo é declarado executado ou aprovado por essa atualização. O Luna Max deverá entregar o estado real, as correções e os testes do escopo até PROPERTY_SCOPE_OFFLINE_PASS, ou registrar exatamente o bloqueio externo que impede continuar. Aprovação offline demonstra o comportamento nas condições e plataformas ensaiadas; não equivale a lançamento público ou a auditoria independente de segurança.
