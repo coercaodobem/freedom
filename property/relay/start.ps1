@@ -1,6 +1,12 @@
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
+function Get-PackageSha256([string]$Path) {
+    $Algorithm = [Security.Cryptography.SHA256]::Create()
+    $Stream = [IO.File]::OpenRead($Path)
+    try { return [BitConverter]::ToString($Algorithm.ComputeHash($Stream)).Replace('-', '').ToLowerInvariant() }
+    finally { $Stream.Dispose(); $Algorithm.Dispose() }
+}
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem) {
     throw 'Este pacote requer Windows x64.'
 }
@@ -26,18 +32,21 @@ if (-not (Test-Path -LiteralPath $Archive)) {
             foreach ($Part in $Manifest.parts) {
                 if ($Part.file -notmatch '^part-[0-9]{3}$') { throw 'Segmento inválido.' }
                 $PartPath = Join-Path $PartsDir $Part.file
-                if ((Get-FileHash -LiteralPath $PartPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Part.sha256) { throw "Hash inválido: $($Part.file)" }
+                if ((Get-PackageSha256 $PartPath) -ne $Part.sha256) { throw "Hash inválido: $($Part.file)" }
                 $InputStream = [IO.File]::OpenRead($PartPath)
                 try { $InputStream.CopyTo($Output) } finally { $InputStream.Dispose() }
             }
         } finally { $Output.Dispose() }
-        if ((Get-FileHash -LiteralPath $Temporary -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedHash) { throw 'Hash do pacote não confere.' }
+        if ((Get-PackageSha256 $Temporary) -ne $ExpectedHash) { throw 'Hash do pacote não confere.' }
         Move-Item -LiteralPath $Temporary -Destination $Archive
     } finally { if (Test-Path -LiteralPath $Temporary) { Remove-Item -LiteralPath $Temporary } }
 }
-if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedHash) { throw 'Hash do pacote não confere.' }
+if ((Get-PackageSha256 $Archive) -ne $ExpectedHash) { throw 'Hash do pacote não confere.' }
 $Java = Join-Path $Runtime 'geode\runtime\bin\java.exe'
-if (-not (Test-Path -LiteralPath $Java)) { Expand-Archive -LiteralPath $Archive -DestinationPath $Runtime -Force }
+if (-not (Test-Path -LiteralPath $Java)) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::ExtractToDirectory($Archive, $Runtime)
+}
 if (-not (Test-Path -LiteralPath $Config)) {
     $Database = (Join-Path $DataDir 'events.db').Replace('\','\\').Replace('"','\"')
     $Text = @"
