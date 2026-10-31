@@ -770,7 +770,16 @@
   }
   function registerOfflineShell() {
     if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
-    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(error => console.warn('Property: cache offline indisponível.', error));
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      if (!state.secret && !document.querySelector('input[type="password"]:focus')) {
+        refreshing = true; window.location.reload();
+      } else showToast('Nova versão disponível. Reabra o app quando terminar.');
+    });
+    navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
+      .then(registration => registration.update())
+      .catch(error => console.warn('Property: cache offline indisponível.', error));
   }
   function wireEvents() {
     $('create-account-button').addEventListener('click', () => showAuthPane('auth-setup'));

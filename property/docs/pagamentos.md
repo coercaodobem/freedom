@@ -1,4 +1,4 @@
-# XMR e XNO no Property
+# BTC, XMR e XNO no Property
 
 Atualizado em 2026-10-31. A mudança incorpora o requisito do commit `55e379c9dbdf8637b32422d32e982460aa5862e5`.
 
