@@ -9,6 +9,7 @@ const html = await readFile(join(root, 'web/index.html'), 'utf8');
 const about = await readFile(join(root, 'web/about.html'), 'utf8');
 const manifest = JSON.parse(await readFile(join(root, 'web/manifest.webmanifest'), 'utf8'));
 const app = await readFile(join(root, 'web/app.js'), 'utf8');
+const contact = await readFile(join(root, 'web/contact.js'), 'utf8');
 const sw = await readFile(join(root, 'web/sw.js'), 'utf8');
 const vault = await readFile(join(root, 'web/vault.js'), 'utf8');
 const routing = await readFile(join(root, 'web/routing.js'), 'utf8');
@@ -41,8 +42,12 @@ assert.match(html, /\.\/marketplace\.js/);
 assert.match(sw, /marketplace\.js/);
 assert.match(html, /\.\/campaigns\.js/);
 assert.match(sw, /campaigns\.js/);
-assert.match(sw, /property-shell-v8/);
+assert.match(sw, /property-shell-v9/);
 assert.match(app, /Campaigns\.selectSponsoredCampaigns/);
+assert.match(html, /\.\/contact\.js/);
+assert.match(app, /Contact\.parsePublicKey/);
+assert.match(contact, /não busca nomes de usuário/);
+assert.match(sw, /contact\.js/);
 assert.match(app, /campaigns-\$\{state\.pubkey\}/);
 assert.match(app, /noopener noreferrer/);
 assert.match(html, /não confirma pagamentos BTC, XMR ou XNO nas respectivas redes/i);
@@ -104,7 +109,7 @@ for (const path of [...shellPaths, ...pagePaths, ...manifestPaths]) {
   assert.equal(resolved.origin, pagesBase.origin, `static reference stays on the Pages origin: ${path}`);
   assert.ok(resolved.pathname.startsWith('/property/'), `static reference stays under the repository path: ${path}`);
 }
-for (const localPath of ['./about.html', './styles.css', './vault.js', './routing.js', './forwarding.js', './nano.js', './money.js', './marketplace.js', './campaigns.js', './manifest.webmanifest', './assets/icon.svg', './vendor/nostr-tools-2.25.2.bundle.js', './app.js']) {
+for (const localPath of ['./about.html', './styles.css', './vault.js', './routing.js', './forwarding.js', './nano.js', './money.js', './marketplace.js', './campaigns.js', './contact.js', './manifest.webmanifest', './assets/icon.svg', './vendor/nostr-tools-2.25.2.bundle.js', './app.js']) {
   await access(join(root, 'web', localPath));
 }
 await access(join(root, 'relay/dist-parts/manifest.txt'));

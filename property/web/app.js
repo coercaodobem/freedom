@@ -14,6 +14,7 @@
   const Money = window.PropertyMoney;
   const Marketplace = window.PropertyMarketplace;
   const Campaigns = window.PropertyCampaigns;
+  const Contact = window.PropertyContact;
   const eventSourceHints = new WeakMap();
   const state = {
     db: null, account: null, secret: null, pubkey: '', npub: '', relays: [...DEFAULT_RELAYS],
@@ -494,15 +495,6 @@
     if (hints.length) state.peerRelayHints.set(pubkey, hints);
     await selectConversation(pubkey); await renderConversations();
   }
-  function parsePublicKey(value) {
-    const text = value.trim();
-    if (/^[0-9a-fA-F]{64}$/.test(text)) return { pubkey: text.toLowerCase(), relayHints: [] };
-    const decoded = N.nip19.decode(text);
-    if (decoded.type === 'npub') return { pubkey: decoded.data, relayHints: [] };
-    if (decoded.type === 'nprofile') return { pubkey: decoded.data.pubkey, relayHints: decoded.data.relays.map(normalizeRelay) };
-    throw new Error('Use um npub, nprofile ou uma chave hex de 64 caracteres.');
-  }
-
   function setActiveView(view) {
     state.activeView = view;
     for (const name of ['messages', 'hangout', 'marketplace', 'node']) {
@@ -777,7 +769,7 @@
         refreshing = true; window.location.reload();
       } else showToast('Nova versão disponível. Reabra o app quando terminar.');
     });
-    navigator.serviceWorker.register('./sw.js?v=property-v8', { scope: './', updateViaCache: 'none' })
+    navigator.serviceWorker.register('./sw.js?v=property-v9', { scope: './', updateViaCache: 'none' })
       .then(registration => registration.update())
       .catch(error => console.warn('Property: cache offline indisponível.', error));
   }
@@ -805,8 +797,15 @@
     $('empty-new-chat').addEventListener('click', () => $('new-chat-dialog').showModal());
     $('start-chat-button').addEventListener('click', async () => {
       try {
-        const parsed = parsePublicKey($('peer-input').value);
-        const hints = [...new Set([...parsed.relayHints, ...$('peer-relays-input').value.split(/[\n,]/).map(item => item.trim()).filter(Boolean).map(normalizeRelay)])];
+        const parsed = Contact.parsePublicKey($('peer-input').value);
+        let profileHints;
+        try { profileHints = parsed.relayHints.map(normalizeRelay); }
+        catch { throw new Error('O nprofile contém um endereço de relay inválido. Use o npub ou peça à pessoa que compartilhe o contato novamente.'); }
+        const extraHints = $('peer-relays-input').value.split(/[\n,]/).map(item => item.trim()).filter(Boolean).map(value => {
+          try { return normalizeRelay(value); }
+          catch { throw new Error('Confira o endereço de relay informado. Use uma URL wss:// válida; ws:// só funciona em testes locais.'); }
+        });
+        const hints = [...new Set([...profileHints, ...extraHints])];
         await addConversation(parsed.pubkey, $('peer-name-input').value, hints);
         $('new-chat-dialog').close(); $('peer-input').value = ''; $('peer-name-input').value = ''; $('peer-relays-input').value = ''; showError('new-chat-error');
       }
@@ -869,7 +868,7 @@
     for (const eventName of ['pointerdown', 'keydown', 'touchstart']) document.addEventListener(eventName, resetIdleLock, { passive: true });
   }
   async function boot() {
-    if (!N || !N.nip17 || !N.nip19 || !Vault || !Routing || !Bridge || !bridge || !Nano || !Money || !Marketplace) { $('auth-error').textContent = 'A biblioteca local de protocolo não carregou. Recarregue o pacote do Property.'; return; }
+    if (!N || !N.nip17 || !N.nip19 || !Vault || !Routing || !Bridge || !bridge || !Nano || !Money || !Marketplace || typeof Contact?.parsePublicKey !== 'function') { $('auth-error').textContent = 'Os arquivos locais do protocolo ou de contatos não carregaram. Recarregue o pacote do Property.'; return; }
     wireEvents();
     registerOfflineShell();
     try {

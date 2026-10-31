@@ -1,0 +1,24 @@
+{
+  "two_relay_bridge": {
+    "relays": ["ws://127.0.0.1:17450", "ws://127.0.0.1:17451"],
+    "data_and_config_directories": "unique temporary directories per relay",
+    "cleanup": "processes exited; temporary bridge lab directory removed"
+  },
+  "seven_relay_startup": {
+    "relays": [
+      "ws://127.0.0.1:17460", "ws://127.0.0.1:17461", "ws://127.0.0.1:17462",
+      "ws://127.0.0.1:17463", "ws://127.0.0.1:17464", "ws://127.0.0.1:17465",
+      "ws://127.0.0.1:17466"
+    ],
+    "data_and_config_directories": "unique temporary directories per relay",
+    "permission_checks": "data/config directories 0700; relay TOML files 0600",
+    "cleanup": "SIGTERM and child reaping verified by runner"
+  },
+  "browser_contact_diagnostic": {
+    "http_origin": "http://127.0.0.1:18480/",
+    "websocket_relay": "ws://127.0.0.1:17450",
+    "identity": "synthetic local identity; encrypted vault and origin cache deleted after inspection",
+    "observed_invalid_input": "coercaodobem",
+    "observed_error": "Este campo não busca nomes de usuário. Cole um npub ou nprofile completo, ou informe uma chave pública hex de 64 caracteres."
+  }
+}

@@ -1,0 +1,4 @@
+{"diagnostic":"local-smoke-suite","status":"PASS","count":13,"exit_code":0,"network_scope":"socket-free tests; no external access attempted","artifact":"run-smoke.log"}
+{"diagnostic":"two-real-geode-bridge","status":"PASS","exit_code":0,"network_scope":"loopback only","artifact":"bridge-integration.log"}
+{"diagnostic":"seven-real-geode-websocket-readiness","status":"PASS","count":7,"exit_code":0,"network_scope":"loopback only","artifact":"seven-relays.log"}
+{"diagnostic":"new-chat-invalid-handle-browser","status":"PASS","browser":"Codex In-app Browser","origin":"http://127.0.0.1:18480/","network_scope":"local HTTP and one local Geode relay only","visual_inspection":"observed Portuguese validation in browser screenshot; capture not persisted as a file","cleanup":"disposable identity, IndexedDB, service worker, cache, relay data and processes removed"}

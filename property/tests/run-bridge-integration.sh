@@ -18,9 +18,12 @@ test_root="$(mktemp -d /tmp/property-bridge-it.XXXXXX)"
 source_pid=""
 target_pid=""
 cleanup() {
-  if [[ -n "$source_pid" ]]; then kill "$source_pid" 2>/dev/null || true; wait "$source_pid" 2>/dev/null || true; fi
-  if [[ -n "$target_pid" ]]; then kill "$target_pid" 2>/dev/null || true; wait "$target_pid" 2>/dev/null || true; fi
+  local failed=0
+  trap - EXIT INT TERM
+  if [[ -n "$source_pid" ]]; then kill "$source_pid" 2>/dev/null || true; wait "$source_pid" 2>/dev/null || true; kill -0 "$source_pid" 2>/dev/null && failed=1; fi
+  if [[ -n "$target_pid" ]]; then kill "$target_pid" 2>/dev/null || true; wait "$target_pid" 2>/dev/null || true; kill -0 "$target_pid" 2>/dev/null && failed=1; fi
   rm -rf -- "$test_root"
+  if [[ "$failed" == 1 ]]; then printf 'Um relay de teste não encerrou corretamente.\n' >&2; exit 1; fi
 }
 trap cleanup EXIT
 
@@ -46,3 +49,16 @@ source_url="ws://127.0.0.1:$SOURCE_PORT"
 target_url="ws://127.0.0.1:$TARGET_PORT"
 node "$TEST_DIR/bridge-integration.mjs" "$source_url" "$target_url"
 node "$TEST_DIR/relay-integration.mjs" "$target_url"
+
+source_db="$test_root/source-data/events.db"
+target_db="$test_root/target-data/events.db"
+[[ -f "$source_db" && -f "$target_db" && ! "$source_db" -ef "$target_db" ]] || {
+  printf 'Os dois relays precisam manter bancos SQLite independentes.\n' >&2; exit 1;
+}
+[[ "$(stat -c '%a' "$test_root/source-data")" == 700 && "$(stat -c '%a' "$test_root/target-data")" == 700 ]] || {
+  printf 'Diretório de dados de relay precisa de permissão 700.\n' >&2; exit 1;
+}
+[[ "$(stat -c '%a' "$test_root/source-config/geode.toml")" == 600 && "$(stat -c '%a' "$test_root/target-config/geode.toml")" == 600 ]] || {
+  printf 'Configuração de relay precisa de permissão 600.\n' >&2; exit 1;
+}
+printf 'PASS: bancos distintos, dados 700, configurações 600; processos serão encerrados e o laboratório temporário removido.\n'

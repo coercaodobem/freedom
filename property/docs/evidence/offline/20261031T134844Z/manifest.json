@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "run_id": "property-offline-20261031T134844Z",
+  "started_utc": "2026-10-31T13:42:07Z",
+  "checkpoint_utc": "2026-10-31T13:55:10Z",
+  "requested_executor": "Luna Max",
+  "actual_executor": "Codex GPT-6",
+  "repository": "https://github.com/coercaodobem/property",
+  "branch": "modelo-mvp",
+  "base_commit": "cbbf170bb5fb49f26531531d2555999bb77990bc",
+  "git_diff_sha256": "892c9ace4feb37fce25ed5b15f5eb15c226cced94f533d71f3ce4b4687844fc0",
+  "worktree_at_checkpoint": "modified; evidence and implementation changes are uncommitted",
+  "scope": "offline diagnostics only; PROPERTY_SCOPE_OFFLINE_PASS not achieved",
+  "requirements_sources": [
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING-WITH-AI.md",
+    "ROADMAP.md",
+    "property/docs/identidade-do-projeto.md",
+    "property/docs/plano-central.md",
+    "property/docs/pagamentos.md",
+    "property/docs/migracao-property.md",
+    "property/docs/plano-de-testes-central.md",
+    "property/docs/historico-testes-2026-10-31.md"
+  ],
+  "host": {
+    "os": "Linux 7.0.0-38-generic x86_64",
+    "logical_cpus": 16,
+    "ram_total_bytes": 32970711040,
+    "ram_available_bytes_at_inventory": 9785622528,
+    "tmp_available_bytes_at_inventory": 6974517248
+  },
+  "limits": {
+    "cpu_quota": "unreadable from /sys/fs/cgroup/cpu.max",
+    "memory_quota": "unreadable from /sys/fs/cgroup/memory.max",
+    "process_quota": "unreadable from /sys/fs/cgroup/pids.max"
+  },
+  "browser_automation": {
+    "browser": "Codex In-app Browser",
+    "engine_version": "not exposed through the available browser-control API",
+    "playwright_package": "missing"
+  },
+  "tools": {
+    "node": "v22.22.1",
+    "python": "3.13.13",
+    "java": "25.0.4.1",
+    "firefox": "/usr/bin/firefox",
+    "playwright": "missing",
+    "bitcoin_core": "missing",
+    "monero_node_and_wallet_rpc": "missing",
+    "nano_node": "missing",
+    "android_sdk_and_emulator": "missing",
+    "xcrun": "missing",
+    "docker_cli": "/usr/bin/docker; daemon access denied"
+  },
+  "test_ports": {
+    "two_relay_bridge": [
+      17450,
+      17451
+    ],
+    "seven_relay_mesh": [
+      17460,
+      17461,
+      17462,
+      17463,
+      17464,
+      17465,
+      17466
+    ],
+    "static_app_server": 18480
+  },
+  "remotes": {
+    "origin": "https://github.com/vitorpamplona/amethyst.git",
+    "property": "https://github.com/coercaodobem/property.git"
+  }
+}

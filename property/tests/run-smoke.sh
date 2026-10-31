@@ -14,6 +14,7 @@ for test_file in \
   vault-smoke.mjs \
   forwarding-smoke.mjs \
   sw-update-smoke.mjs \
+  contact-smoke.mjs \
   app-contract-smoke.mjs \
   relay-migration-smoke.mjs \
   portable-packages-smoke.mjs \

@@ -1,0 +1,27 @@
+{
+  "network_disabled_marker": "CODEX_SANDBOX_NETWORK_DISABLED=1",
+  "default_profile": {
+    "lsm": "bwrap//&unpriv_bwrap (enforce)",
+    "cap_eff": "0000000000000000",
+    "no_new_privs": 1,
+    "seccomp": 2,
+    "loopback_bind": "EPERM",
+    "unshare_user_netns": "EPERM",
+    "bwrap_unshare_net": "user namespaces unavailable",
+    "systemd_user_scope": "user bus unavailable",
+    "docker_daemon": "access denied"
+  },
+  "escalated_loopback_profile": {
+    "lsm": "chatgpt (unconfined)",
+    "cap_eff": "0000000000000000",
+    "no_new_privs": 0,
+    "seccomp": 0,
+    "default_ipv4_routes_observed": 1,
+    "default_ipv6_routes_observed": 1,
+    "firewall_inspection": "iptables/nft returned EPERM"
+  },
+  "external_tcp_probe_sent": false,
+  "external_dns_query_sent": false,
+  "verdict": "BLOCKED",
+  "reason": "The default profile blocks loopback sockets, while the approved loopback test profile exposes IPv4 and IPv6 default routes and does not permit inspection of the effective firewall rules. The environment marker alone is insufficient proof of enforced egress isolation. No public traffic was generated."
+}

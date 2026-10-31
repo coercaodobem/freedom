@@ -80,8 +80,8 @@ O orquestrador deve retornar código 0 somente para o perfil solicitado integral
 
 - Fixar commit/diff, versões de protocolo, Node.js 22+, Python local quando necessário, navegadores, ferramentas de automação, runtimes, binários de moedas e licenças. Inventariar hashes de todos os executáveis usados.
 - Preparação de ferramentas é uma fase distinta da execução offline. Ferramenta faltante gera BLOCKED com caminho/versão/hash necessários. Não baixar pacotes, navegadores, imagens Docker, Maven, npm ou atualizações durante os testes. Caches preexistentes só valem se inventariados e verificáveis. Cache de build ausente bloqueia o teste de build offline, sem afetar a definição do pacote de runtime.
-- Usar namespace de rede, VMs ou rede de contêineres já disponível sem rota externa; em Windows/macOS, usar isolamento equivalente na VM/máquina de laboratório. Autorizar apenas endereços/portas locais declarados. Uma rota externa residual, inclusive IPv6, DNS, proxy, WebRTC ou processo filho, reprova o isolamento.
-- Provar o bloqueio em processos pertencentes ao laboratório com uma tentativa TCP para endereço de documentação não permitido e uma consulta DNS externa sob timeout. Registrar o motivo da negação, regras efetivas e contadores, sem depender de o destino estar disponível. Um erro de DNS isolado não prova isolamento.
+- Usar namespace de rede, VM ou rede de contêineres já disponível sem rota externa; em Windows/macOS, usar isolamento equivalente na VM/máquina de laboratório. Autorizar apenas loopback e endereços/portas locais declarados. Uma rota externa residual, inclusive IPv6, proxy, WebRTC ou processo filho, reprova o isolamento.
+- Comprovar o isolamento antes de iniciar os fluxos pela inspeção das regras efetivas de firewall/namespace, tabela de rotas IPv4/IPv6, configuração DNS/proxy e política aplicada aos processos do laboratório. Registrar a configuração e os contadores disponíveis antes/depois. Não enviar sondas TCP, consultas DNS ou qualquer tráfego a endereços públicos, inclusive endereços de documentação; se a política de isolamento não puder ser inspecionada ou aplicada, marcar BLOCKED. Erro de resolução, variável de ambiente ou interceptação de browser isoladamente não prova isolamento.
 - Capturar conexões por processo e requisições do navegador. Desativar no perfil descartável sincronização de conta, atualização/extensões e fallback para relays públicos. Relays padrão do app devem ser substituídos por configuração de laboratório antes de qualquer conexão externa; se não existir esse caminho seguro, preparar o harness/configuração e registrar a lacuna do produto.
 - O bloqueio de rede deve ser provado antes dos fluxos e verificado ao final. Mock/interceptação do navegador é defesa adicional, nunca a única fronteira.
 - Servir o mesmo bundle em localhost e sob o caminho /property/. Para HTTPS/WSS, usar CA/certificado local de teste confiado apenas no laboratório. Não aprovar ignorando globalmente erros TLS. Capturar também uma tentativa WSS com certificado inválido e comprovar rejeição.
@@ -135,7 +135,7 @@ Corpus mínimo: 100 notas públicas distintas, 50 mensagens por direção, 10 of
 | Caso | Procedimento e aprovação |
 |---|---|
 | G00-01 | Registrar fontes de requisitos, commit, diff, inventário de ferramentas, hashes, sistema, limites, portas e topologia. Falta de dependência é explícita e impede iniciar o perfil afetado. |
-| G00-02 | Aplicar isolamento de laboratório; provar bloqueio de egress TCP/DNS/IPv4/IPv6 e proxies, mantendo loopback/LAN de teste. Testar também browser, relays, bridges, RPCs e filhos. |
+| G00-02 | Aplicar isolamento de laboratório; inspecionar as regras efetivas e comprovar ausência de rota/egress TCP, DNS, IPv4, IPv6 e proxies, mantendo somente loopback e endereços locais declarados. Não enviar tráfego externo para testar o bloqueio. Conferir também as políticas do browser, relays, bridges, RPCs e processos filhos. |
 | G00-03 | Inicializar dois Geode reais, depois os sete relays isolados; verificar prontidão, bancos distintos, permissões privadas e encerramento seguro. Porta ocupada/timeout nunca ativa fallback público. |
 | G00-04 | Interromper um teste propositalmente. Relatório fica BLOCKED, exit não zero, filhos encerrados, evidência sanitizada preservada e dados reais intactos. |
 
@@ -321,7 +321,7 @@ Diretório de trabalho sugerido: /tmp/property-offline/<run-id>, com permissões
 Artefatos mínimos:
 
 - manifest.json: schema, run_id, executor Luna Max, versão efetiva de ferramenta/modelo quando disponível, horário, commit/diff, hashes do produto/harness, seed, plataforma, browser e orçamento.
-- isolation.json: regras/allowlist, probes, contadores de egress e configuração do laboratório. Não conter credenciais/proxies pessoais.
+- isolation.json: regras/allowlist inspecionadas, contadores de egress disponíveis e configuração do laboratório; declarar explicitamente que nenhuma sonda pública foi enviada. Não conter valores de proxy, credenciais ou dados pessoais.
 - topology.json: processos, relays, bancos, ligações permitidas, corpus, injeções de falha e timestamps de cada transição.
 - cases.jsonl: um registro final por caso com gate, requisito, comando, início/fim, esperado, observado, status, exit code, motivo e referências a evidências.
 - reconciliation.json: IDs públicos/envelopes e contagens por relay/UI; saldos atômicos sintéticos, taxas e estados financeiros. Sem conteúdo privado/chaves.

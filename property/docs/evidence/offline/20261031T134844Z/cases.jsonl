@@ -1,0 +1,7 @@
+{"case":"G00-01","status":"PASS","gate_eligible":true,"evidence":["manifest.json","source.sha256","tools.sha256","topology.json"],"reason":"Requisitos, commit/diff, recursos observáveis, topologia, portas, dependências, hashes e limites inacessíveis foram registrados explicitamente."}
+{"case":"G00-02","status":"BLOCKED","gate_eligible":true,"evidence":["isolation.json"]}
+{"case":"G00-03","status":"PASS","gate_eligible":true,"evidence":["bridge-integration.log","seven-relays.log","topology.json"]}
+{"case":"G00-04","status":"BLOCKED","gate_eligible":true,"reason":"No offline orchestrator/report runner exists yet to inject interruption and verify BLOCKED output, nonzero exit, preserved evidence and child cleanup."}
+{"case":"G01-01","status":"PASS","gate_eligible":false,"evidence":["run-smoke.log"],"reason":"13/13 local smoke suites passed; G00 is not approved, so this is diagnostic only."}
+{"case":"G01-02","status":"BLOCKED","gate_eligible":false,"evidence":["bridge-integration.log"],"reason":"Two-relay behavior passed; native launcher integration has not been executed as a complete case, and G00 is not approved."}
+{"case":"G03-05","status":"NOT_RUN","gate_eligible":false,"evidence":["diagnostics.jsonl"],"reason":"Invalid username UI case and parser negatives passed, but own-contact and equal-name scenarios have not been completed as one case."}
