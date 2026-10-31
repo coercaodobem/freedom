@@ -41,7 +41,7 @@ assert.match(html, /\.\/marketplace\.js/);
 assert.match(sw, /marketplace\.js/);
 assert.match(html, /\.\/campaigns\.js/);
 assert.match(sw, /campaigns\.js/);
-assert.match(sw, /property-shell-v7/);
+assert.match(sw, /property-shell-v8/);
 assert.match(app, /Campaigns\.selectSponsoredCampaigns/);
 assert.match(app, /campaigns-\$\{state\.pubkey\}/);
 assert.match(app, /noopener noreferrer/);
