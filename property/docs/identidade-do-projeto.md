@@ -1,6 +1,6 @@
 # Identidade do Projeto — Property
 
-**Status:** visão do produto e registro da primeira implementação local na branch `modelo-mvp`; o app tem publicação inicial; a marca e a URL Property passam por nova validação.
+**Status:** visão do produto e registro da primeira implementação local na branch `modelo-mvp`; o app tem publicação inicial; a marca e a URL Property têm publicação e validação próprias registradas no plano de testes.
 **Atualizado:** 2026-10-31.
 
 ## Propósito

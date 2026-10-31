@@ -1,0 +1,36 @@
+{
+  "checked_at": "2026-10-31T08:56:44.866319+00:00",
+  "run_id": 41186464037,
+  "source_commit": "2cc93aff5f90bf09ba9e0e3242572398d939da0e",
+  "url": "https://github.com/coercaodobem/property/actions/runs/41186464037",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "smoke",
+      "conclusion": "success"
+    },
+    {
+      "name": "Relay nativo (windows-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "Relay nativo (ubuntu-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "Relay nativo (macos-15)",
+      "conclusion": "success"
+    }
+  ],
+  "native_proof": [
+    "native win32/x64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart",
+    "native linux/x64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart",
+    "native darwin/arm64, bundled Java, NIP-17/NIP-15 BTC/XMR/XNO and persistence across restart"
+  ],
+  "limits": [
+    "No 24-hour soak conclusion",
+    "No physical Android/iOS test",
+    "No Mac Intel relay",
+    "No blockchain settlement or checkout"
+  ]
+}

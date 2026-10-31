@@ -13,6 +13,7 @@ for test_file in \
   protocol-smoke.mjs \
   vault-smoke.mjs \
   forwarding-smoke.mjs \
+  sw-update-smoke.mjs \
   app-contract-smoke.mjs \
   relay-migration-smoke.mjs \
   portable-packages-smoke.mjs \

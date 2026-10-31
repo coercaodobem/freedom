@@ -85,3 +85,7 @@ Relate vulnerabilidades pelo [canal privado do Property](SECURITY.md). Não abra
 Ao contribuir, você licencia sua contribuição sob [MIT](LICENSE). Preserve os avisos e as licenças de qualquer código de terceiros. Dependências novas precisam ter origem e licença verificadas.
 
 A documentação técnica original do Amethyst continua disponível no [commit de origem](https://github.com/vitorpamplona/amethyst/blob/948135f7dbbae81d79a0b985282ce673397a7618/CONTRIBUTING.md). Ela é uma referência para os módulos reaproveitados; o fluxo de contribuição do Property é o descrito acima.
+
+### Atualização da PWA
+
+Ao alterar o shell web, atualizar conjuntamente a versão dos URLs locais em HTML/manifesto, a lista `SHELL`, o nome do cache e a URL de registro do service worker. A instalação usa `cache: reload` para evitar mistura de arquivos antigos e novos; nunca apagar IndexedDB para atualizar a marca. `sw-update-smoke.mjs` verifica cobertura offline, política de atualização e preservação de caches alheios.

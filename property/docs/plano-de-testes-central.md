@@ -1,7 +1,7 @@
 # Plano de Testes Central — Projeto Property
 
-**Status:** execução parcial atualizada em 2026-10-30. O push local está autenticado como `coercaodobem`, e a PWA foi publicada em HTTPS com validação visual inicial e comparação dos arquivos publicados. A suíte smoke local passou em 2026-10-28. Não há resultado final comprovado para o ensaio de disponibilidade de 24 horas. O plano integral, incluindo Android/iOS, engine de pagamentos BTC/XMR/XNO e disponibilidade 24h, ainda não foi executado.
-**Objetivo:** verificar reuso do Amethyst, origem/dependências, identidade local, comunicação, nodes, PWA, publicidade e pagamentos BTC/XMR/XNO conforme os critérios deste documento.
+**Status:** execução parcial atualizada em 2026-10-31. Repositório e produto renomeados para Property. As 12 suítes smoke locais passaram, incluindo BTC/XMR/XNO, backups antigos e pacotes portáteis. A matriz [41186464037](https://github.com/coercaodobem/property/actions/runs/41186464037) passou em Linux x86_64, Windows x64 e macOS Apple Silicon, com runtime incluído e persistência após reinício. A PWA está publicada em HTTPS; o registro de arquivos servidos acompanha a versão correspondente. Não há conclusão comprovada do ensaio de 24 horas. Dispositivos móveis reais e engine de pagamento/checkout continuam pendentes.
+**Objetivo:** verificar reuso do Amethyst, dependências, identidade, comunicação, nodes, PWA, publicidade e pagamentos BTC/XMR/XNO.
 
 ## 1. Baseline do MVP
 
@@ -53,6 +53,11 @@ Referências de protocolo para pesquisa e fixação da versão no projeto: [NIP-
 | 2026-10-30 | Habilitar Pages com origem GitHub Actions, permitir `modelo-mvp` e executar workflow `41130981007` | PASS: tentativa 2 concluída com sucesso no commit `e525f3028391cea6133fe7982b4e342ee576f449`; URL HTTPS `https://coercaodobem.github.io/property/`. |
 | 2026-10-30 | Abrir a URL pública e comparar os 16 arquivos publicados com a fonte | PASS: tela inicial carregou; nenhum erro ou aviso no console; todos os arquivos responderam HTTP 200 com SHA-256 idêntico ao checkout. [Registro dos hashes](evidence/pages-2026-10-30.json). Não cobre criação de identidade, mensagens pela Internet ou dispositivos reais. |
 
+| 2026-10-31 | Incorporar commit `55e379c9db` e renomear repositório/produto | Property em `coercaodobem/property`; diretório do produto `property/`; identificadores legados preservados somente para compatibilidade e evidências. |
+| 2026-10-31 | `bash property/tests/run-smoke.sh` | PASS: 12 suítes, incluindo unidades BTC/XMR/XNO, ofertas/campanhas, cofre e backup legado, ponte, CSP/assets, migração de launcher, atualização segura do cache PWA e todos os segmentos. |
+| 2026-10-31 | `bash property/tests/run-bridge-integration.sh 17452 17453` | PASS: dois relays isolados, ponte pública, NIP-17 e NIP-15. A primeira tentativa na sandbox foi bloqueada por permissão de sockets; repetição com acesso loopback autorizado passou. |
+| 2026-10-31 | `node property/tests/native-relay-integration.mjs` local e CI | PASS em Linux x86_64, Windows x64 e macOS arm64: Java incluído, SQLite, NIP-17, ofertas de 1 satoshi e 1 piconero, edição/retirada e mesmos eventos após reinício. [Evidência da matriz](evidence/native-platforms-2026-10-31.json). A falha Windows inicial de `Get-FileHash` foi corrigida usando APIs .NET padrão. |
+
 **Não aprovado ou não executado:** ensaio completo de 24 horas; Android/iOS; teste de perda de rede em aparelho; revisão independente de segurança; marketplace completo; engine de campanhas BTC/XMR/XNO e verificação de pagamento; checkout; auditoria integral de dependências. O repositório `coercaodobem/property`, o push e a publicação inicial de Pages foram verificados em 2026-10-30. O leitor de campanha opt-in não é evidência de pagamento. Os itens pendentes continuam gates antes de beta público.
 
 Para repetir a suíte local: `bash property/tests/run-smoke.sh`. Para a integração entre dois relays isolados: `bash property/tests/run-bridge-integration.sh [porta-origem] [porta-destino]`. O ensaio de 24 horas é separado: `node property/tests/relay-soak.mjs 86400 60 17447`; em execução curta, informe duração e intervalo menores mantendo porta loopback livre.
@@ -97,7 +102,7 @@ A matriz é um requisito de execução, não uma declaração de suporte testado
 ### Ambientes
 
 1. **Local:** aplicação, dois ou mais relays isolados, node de publicidade, carteira simulada e ferramenta de captura de rede.
-2. **Staging/testnet:** PWA HTTPS em host controlado, relays de teste e Nano testnet/local e Monero regtest/stagenet. Testar o fluxo planejado do GitHub Pages sem lançar o site institucional antes de o app estar pronto.
+2. **Staging/testnet:** PWA HTTPS em host controlado, relays de teste, Bitcoin regtest/signet, Nano testnet/local e Monero regtest/stagenet. Testar o fluxo planejado do GitHub Pages sem lançar o site institucional antes de o app estar pronto.
 3. **Dispositivos reais:** pelo menos um Android, um iPhone/iPad e um PC; testar navegadores representativos.
 4. **Ensaio de disponibilidade:** node de PC operando continuamente por 24 horas, com interrupções de rede e reinicialização programadas.
 
