@@ -620,7 +620,7 @@
       const description = $('product-description').value.trim();
       if (!name) throw new Error('Informe o nome da oferta.');
       const rawPrice = $('product-price').value.trim();
-      if (!rawPrice) throw new Error('Informe o preço em XMR ou XNO.');
+      if (!rawPrice) throw new Error('Informe o preço em BTC, XMR ou XNO.');
       const { price, currency, atomic, raw } = Marketplace.parsePrice(rawPrice, Nano, $('product-currency').value);
       let image = $('product-image').value.trim();
       if (image) { image = Marketplace.safeExternalImageUrl(image); if (!image) throw new Error('Informe uma imagem HTTPS válida, sem credenciais ou endereço local.'); }
@@ -838,7 +838,7 @@
       try { await saveRelaySettings(relays); showToast('Relay local adicionado. A conexão só funciona neste computador.'); }
       catch (error) { showToast(error.message || 'Não foi possível conectar ao relay local.'); }
     });
-    $('copy-relay-command').addEventListener('click', async () => { try { await navigator.clipboard.writeText('./property/relay/start.sh'); showToast('Instrução copiada.'); } catch { showToast('Comando: ./property/relay/start.sh'); } });
+    $('copy-relay-command').addEventListener('click', async () => { const command = /Win/i.test(navigator.platform) ? 'powershell -NoProfile -File .\\property\\relay\\start.ps1' : './property/relay/start.sh'; try { await navigator.clipboard.writeText(command); showToast('Instrução copiada.'); } catch { showToast(`Comando: ${command}`); } });
     $('browser-node-toggle').addEventListener('change', async event => {
       state.bridgeEnabled = event.target.checked;
       try {

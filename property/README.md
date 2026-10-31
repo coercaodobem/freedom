@@ -1,6 +1,6 @@
 # Property
 
-Cliente Nostr com interface PWA, identidade criada e protegida localmente, mensagens privadas NIP-17 e conexão direta com relays. Esta pasta reúne o app web, o comando de relay para Ubuntu e a documentação de adaptação do Amethyst.
+Cliente Nostr com interface PWA, identidade criada e protegida localmente, mensagens privadas NIP-17 e conexão direta com relays. Esta pasta reúne o app web, os comandos de relay para Linux, Windows e macOS Apple Silicon e a documentação de adaptação do Amethyst.
 
 ## Estado da branch `modelo-mvp`
 
@@ -36,10 +36,10 @@ Com Node.js 22 instalado, `bash property/tests/run-smoke.sh` executa os testes l
 - O host estático entrega o código da interface; as conexões de dados são abertas pelo cliente aos relays escolhidos.
 - A opção de manter a sessão neste aparelho prioriza conveniência e reduz a proteção contra alguém que obtenha acesso ao navegador desbloqueado.
 - Hangout e marketplace estão em estágio inicial; pagamentos, custódia, escrow e monetização automática de nodes não são ativados nesta versão.
-- A exibição opcional de campanhas valida a assinatura e os campos do evento, usa link HTTPS e mantém imagem inline. O pagamento XMR/XNO declarado pelo node não é verificado pelo cliente; a engine de aceite, recebimento e reembolso não existe nesta versão.
+- A exibição opcional de campanhas valida a assinatura e os campos do evento, usa link HTTPS e mantém imagem inline. O pagamento BTC/XMR/XNO declarado pelo node não é verificado pelo cliente; a engine de aceite, recebimento e reembolso não existe nesta versão.
 
 Consulte `docs/plano-central.md`, `docs/identidade-do-projeto.md` e `docs/plano-de-testes-central.md` para as decisões e critérios completos.
 
 ## Continuidade de dados e pagamentos
 
-Consulte [migração para Property](docs/migracao-property.md) para dados e instalações existentes, e [pagamentos XMR/XNO](docs/pagamentos.md) para esquema de valores e limitações.
+Consulte [migração para Property](docs/migracao-property.md) para dados e instalações existentes, e [pagamentos BTC/XMR/XNO](docs/pagamentos.md) para esquema de valores e limitações.

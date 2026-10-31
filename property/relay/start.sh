@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$(uname -s)" == Darwin ]]; then exec bash "$SCRIPT_DIR/start-macos.sh" "$@"; fi
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 # Preserve legacy configuration and event history on existing installations.
 DATA_BASE="${XDG_DATA_HOME:-$HOME/.local/share}"

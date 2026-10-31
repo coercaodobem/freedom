@@ -44,6 +44,11 @@ const moneroProduct = signEvent({
   kind: 30018, pubkey: alicePub, tags: [['d', moneroId]], created_at: listingTime,
   content: JSON.stringify({ id: moneroId, stall_id: stallId, name: 'XMR precision test', currency: 'XMR', price: 0.000000000001, price_atomic: '1' })
 }, alice);
+const bitcoinId = `product-${crypto.randomUUID()}`;
+const bitcoinProduct = signEvent({
+  kind: 30018, pubkey: alicePub, tags: [['d', bitcoinId]], created_at: listingTime,
+  content: JSON.stringify({ id: bitcoinId, stall_id: stallId, name: 'BTC precision test', currency: 'BTC', price: 0.00000001, price_atomic: '1' })
+}, alice);
 const updatedProduct = signEvent({
   kind: 30018, pubkey: alicePub, tags: [['d', productId]], created_at: listingTime + 1,
   content: JSON.stringify({ id: productId, stall_id: stallId, name: 'XNO precision updated', description: 'NIP-15 update', images: [], currency: 'XNO', price: 0.5, price_raw: '500000000000000000000000000000', quantity: null, specs: [], shipping: [] })
@@ -84,7 +89,7 @@ try {
   socket.send(JSON.stringify(['EVENT', inboxList]));
   const inboxResult = await inboxAck;
   assert.equal(inboxResult[2], true, `relay accepted kind-10050 inbox list: ${inboxResult[3] || ''}`);
-  for (const listing of [stall, product, moneroProduct]) {
+  for (const listing of [stall, product, moneroProduct, bitcoinProduct]) {
     const listingAck = waitFrame(socket, frame => frame[0] === 'OK' && frame[1] === listing.id);
     socket.send(JSON.stringify(['EVENT', listing]));
     const result = await listingAck;
@@ -130,7 +135,7 @@ try {
       if (frame[0] === 'EOSE' && frame[1] === listingQuery) { clearTimeout(timer); socket.removeEventListener('message', onMessage); resolve(); }
     });
   });
-  socket.send(JSON.stringify(['REQ', listingQuery, { ids: [product.id, moneroProduct.id], limit: 3 }]));
+  socket.send(JSON.stringify(['REQ', listingQuery, { ids: [product.id, moneroProduct.id, bitcoinProduct.id], limit: 4 }]));
   await listingDone;
   const storedProduct = listings.get(product.id);
   assert.ok(storedProduct && verifyEvent(storedProduct), 'relay serves the valid signed NIP-15 product');
@@ -140,6 +145,9 @@ try {
   const storedMonero = listings.get(moneroProduct.id);
   assert.ok(storedMonero && verifyEvent(storedMonero));
   assert.equal(Marketplace.displayPrice(JSON.parse(storedMonero.content)), '0.000000000001 XMR', 'one piconero survives relay round-trip');
+  const storedBitcoin = listings.get(bitcoinProduct.id);
+  assert.ok(storedBitcoin && verifyEvent(storedBitcoin));
+  assert.equal(Marketplace.displayPrice(JSON.parse(storedBitcoin.content)), '0.00000001 BTC', 'one satoshi survives relay round-trip');
   const updateAck = waitFrame(socket, frame => frame[0] === 'OK' && frame[1] === updatedProduct.id);
   socket.send(JSON.stringify(['EVENT', updatedProduct]));
   const updateResult = await updateAck;

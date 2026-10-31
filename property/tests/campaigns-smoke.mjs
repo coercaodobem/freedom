@@ -56,6 +56,10 @@ const exposures = C.recordExposure({}, 'property-sponsored-v2:123e4567-e89b-42d3
 assert.equal(C.selectSponsoredCampaigns([valid], N.verifyEvent, { nowSeconds: now + 60, exposures }).length, 0, 'campaign is capped for 24 hours on this device');
 assert.equal(C.selectSponsoredCampaigns([valid], N.verifyEvent, { nowSeconds: now + C.EXPOSURE_WINDOW_SECONDS + 1, exposures }).length, 1, 'campaign can reappear after the local cap');
 
+const bitcoin = C.parseSponsoredCampaign(campaign({ currency: 'BTC', amount_atomic: '1' }), N.verifyEvent, now);
+assert.equal(bitcoin.currency, 'BTC');
+assert.equal(bitcoin.amountAtomic, '1');
+assert.equal(C.parseSponsoredCampaign(campaign({ currency: 'BTC', amount_atomic: '2100000000000001' }), N.verifyEvent, now), null);
 const monero = C.parseSponsoredCampaign(campaign({ currency: 'XMR', amount_atomic: '1' }), N.verifyEvent, now);
 assert.equal(monero.amountAtomic, '1');
 assert.equal(monero.currency, 'XMR');

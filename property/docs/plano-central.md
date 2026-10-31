@@ -1,6 +1,6 @@
 # Plano Central — Execução do Projeto Property
 
-**Status:** snapshot Amethyst publicado em `coercaodobem/property`, branch padrão `modelo-mvp`; PWA e runtime Geode incluídos. A publicação anterior foi verificada em 2026-10-30; a mudança para Property exige nova evidência de deploy. Engine de pagamentos XMR/XNO, auditoria integral e gates restantes continuam pendentes.
+**Status:** snapshot Amethyst publicado em `coercaodobem/property`, branch padrão `modelo-mvp`; PWA e runtime Geode incluídos. A publicação anterior foi verificada em 2026-10-30; a mudança para Property exige nova evidência de deploy. Engine de pagamentos BTC/XMR/XNO, auditoria integral e gates restantes continuam pendentes.
 **Atualizado:** 2026-10-31.
 
 ## Objetivo
@@ -23,7 +23,7 @@ Este documento organiza a execução. A visão do produto está em [identidade-d
 | Dependências | Nenhum código executável externo carregado em runtime. Fixar versões, manter código e dependências de runtime no repo/bundle, preservar licenças e evitar snapshots ou refs dinâmicas. |
 | Hospedagem | Quando o produto estiver pronto, publicar a PWA estática via GitHub Pages a partir do repositório público Property. A hospedagem não fornece backend de comunicação. |
 | Marketplace e Hangout | Primeira versão do Hangout é um feed público Nostr kind 1; marketplace faz descoberta/publicação de ofertas NIP-15. NIP-15 é draft marcado como não recomendado; checkout/custódia ficam fora. |
-| Receita dos nodes | Campanhas são opt-in, assinadas e separadas das mensagens. A leitura atual limita exposição localmente e não envia eventos de clique/visualização; ela não verifica as redes Monero/Nano. Engine de oferta, aceite, cobrança, recusa e reembolso ainda não está implementada. |
+| Receita dos nodes | Campanhas são opt-in, assinadas e separadas das mensagens. A leitura atual limita exposição localmente e não envia eventos de clique/visualização; ela não verifica as redes Bitcoin/Monero/Nano. Engine de oferta, aceite, cobrança, recusa e reembolso ainda não está implementada. |
 
 ## Fork do Amethyst e adaptação de nome/produto (roteiro executável)
 
@@ -105,7 +105,7 @@ Para reconstituir a base upstream em uma auditoria separada: clonar `vitorpamplo
 ### 6. Hangout, marketplace e sustentabilidade
 
 - Depois da base de mensagens, evoluir Hangout e marketplace com eventos compatíveis e componentes reaproveitados do Amethyst.
-- Criar fluxo de campanhas para node: conteúdo e proposta assinada; revisão local; aceite ou recusa; se aceita, moeda XMR ou XNO, valor em unidades atômicas, endereço exclusivo e publicação somente após confirmação verificada pelo adaptador da moeda.
+- Criar fluxo de campanhas para node: conteúdo e proposta assinada; revisão local; aceite ou recusa; se aceita, moeda BTC, XMR ou XNO, valor em unidades atômicas, endereço exclusivo e publicação somente após confirmação verificada pelo adaptador da moeda.
 - Se recusada antes do pagamento, não cobrar. Pagamento inesperado, atrasado ou incompatível segue política explícita de devolução como nova transferência; em XMR, o endereço de reembolso precisa ser acordado e autenticado, sem presumir que a transação revele a origem. Taxas e valor líquido precisam de consentimento; nenhuma carteira do usuário fica na PWA.
 - As carteiras Monero e Nano ficam sob controle local do operador e separadas da identidade Nostr. A integração RPC de cada carteira roda no próprio host, com autenticação/loopback; `enable_control` fica desligado salvo necessidade operacional. Se ativado, o RPC deve escutar apenas em loopback ou ter uma restrição equivalente fora do node, nunca ficar aberto à internet.
 - Exibir patrocínio com clareza, permitir preferência local e não enviar clique/leitura ao anunciante.
@@ -127,7 +127,7 @@ Para reconstituir a base upstream em uma auditoria separada: clonar `vitorpamplo
 - **Relay:** Geode 1.20.0 compilado com JDK 21 e empacotado com JRE para Linux x86_64. O tarball portátil está no repositório como 130 segmentos binários; `property/relay/start.sh` remonta e verifica o SHA-256, grava no diretório do usuário e por padrão faz bind em `127.0.0.1:7447`.
 - **Testes já executados:** criptografia NIP-17/isolamento de destinatário; publicação, descoberta assinada e roteamento por kind 10050; cofre de identidade e backup; contrato de assets/CSP/sintaxe; build `:geode:geodeImage`; e integração de envelopes cifrados, kind 10050 e listagem NIP-15 com preço raw exato contra Geode local passaram. A captura visual local confirmou a tela inicial e o carregamento dos assets sem erros de console. O deploy anterior passou; a nova publicação e os demais gates exigem evidência própria.
 - **Unidades financeiras:** a vitrine NIP-15 publica o preço numérico exigido pelo draft e uma extensão `price_atomic` exata em inteiro decimal e `currency` explícita. `price_raw` continua disponível para compatibilidade XNO. Monero usa 10¹² piconero/XMR; Nano usa 10³⁰ raw/XNO. O pacote local testa 1 raw, 1 XNO, vírgula decimal e rejeição de expoentes/precisão excedida. Isso não implementa carteira, aceite, recebimento, publicação paga ou reembolso.
-- **Fora do MVP entregue até aqui:** engine de campanhas XMR/XNO (oferta, moderação, cobrança e reembolso; há apenas leitor opt-in de eventos assinados), execução da ponte móvel em segundo plano, relay público de entrada no celular, administração de grupos NIP-29, checkout, pedidos, compra, custódia e pagamentos do marketplace.
+- **Fora do MVP entregue até aqui:** engine de campanhas BTC/XMR/XNO (oferta, moderação, cobrança e reembolso; há apenas leitor opt-in de eventos assinados), execução da ponte móvel em segundo plano, relay público de entrada no celular, administração de grupos NIP-29, checkout, pedidos, compra, custódia e pagamentos do marketplace.
 
 ## Política de origem e dependências
 
@@ -152,4 +152,8 @@ Para reconstituir a base upstream em uma auditoria separada: clonar `vitorpamplo
 
 ## Revisão Property de 2026-10-31
 
-O commit do mantenedor `55e379c9dbdf8637b32422d32e982460aa5862e5` foi incorporado antes da adaptação. Nome público, repositório, produto, PWA, workflows e guias passam a Property. A matriz de plataforma inclui Windows, macOS, Linux/Ubuntu, Android e iOS como objetivos; somente o relay Linux x86_64 está empacotado. A interface ganha moeda XMR/XNO e valores atômicos exatos. Detalhes econômicos em [pagamentos.md](pagamentos.md); preservação de dados em [migracao-property.md](migracao-property.md).
+O commit do mantenedor `55e379c9dbdf8637b32422d32e982460aa5862e5` foi incorporado antes da adaptação. Nome público, repositório, produto, PWA, workflows e guias passam a Property. A matriz de plataforma inclui Windows, macOS, Linux/Ubuntu, Android e iOS. Há pacotes de relay Linux x86_64, Windows x64 e macOS Apple Silicon; a matriz de CI valida execução real nesses sistemas. Outras arquiteturas e relay móvel contínuo permanecem pendentes. A interface ganha moeda BTC/XMR/XNO e valores atômicos exatos. Detalhes econômicos em [pagamentos.md](pagamentos.md); preservação de dados em [migracao-property.md](migracao-property.md).
+
+### Extensão de plataformas e Bitcoin
+
+Por solicitação posterior do mantenedor, BTC é moeda aceita nas ofertas e campanhas v2 (1 BTC = 10⁸ satoshis), junto de XMR e XNO. O checkout continua pendente. Foram preparados launchers Windows PowerShell e macOS arm64 com Temurin incluído, versões/hashes fixados e integração nativa no CI. O teste deve validar criação de eventos, SQLite persistente e reinício usando caminhos com espaços. Sem downloads de runtime durante execução. A distribuição web continua apenas `property/web`.

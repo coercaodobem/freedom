@@ -20,14 +20,14 @@ O projeto pretende aproveitar ao máximo o trabalho existente no Amethyst, em ve
 7. **Sem promessa falsa de segundo plano.** No celular, a pessoa pode habilitar colaboração do node enquanto o navegador/app está ativo. O sistema operacional pode suspender a PWA; o projeto não promete relay móvel sempre ligado, tela acesa, root ou funcionamento oculto. PCs podem operar nodes continuamente.
 8. **Código auditável e pacote autônomo.** Código-fonte, versões de dependências e artefatos necessários à execução pertencem ao repositório/pacote do Property. O cliente não carrega scripts, módulos, fontes ou rastreadores executáveis de CDNs em tempo de uso. Builds e versões de origem devem ser identificáveis e verificáveis.
 9. **Descentralização prática.** A pessoa escolhe mais de um relay e pode operar um node. Uma falha ou recusa de um relay não deve transformar o host do app em ponto central de comunicação.
-10. **Financiamento voluntário e transparente.** Um node pode aceitar ou recusar campanhas de marketing remuneradas em XMR ou XNO. A aceitação vem antes do pagamento. Uma campanha paga é apresentada como patrocinada, separada de mensagens e sem rastreamento centralizado de cliques ou leituras.
+10. **Financiamento voluntário e transparente.** Um node pode aceitar ou recusar campanhas de marketing remuneradas em BTC, XMR ou XNO. A aceitação vem antes do pagamento. Uma campanha paga é apresentada como patrocinada, separada de mensagens e sem rastreamento centralizado de cliques ou leituras.
 
 ## Produto e experiência
 
 - **Primeiro acesso:** criar ou recuperar identidade, guardar recuperação com clareza, escolher relays e iniciar conversa sem terminal. O login pode persistir no navegador; senha em texto puro nunca fica armazenada.
 - **Comunicação:** mensagens privadas, conversas e espaços públicos/grupais conforme protocolos Nostr suportados e validados.
 - **Hangout:** a primeira versão é um feed de notas públicas Nostr kind 1, consultado e publicado diretamente nos relays escolhidos. Comunidades fechadas/grupos não fazem parte da implementação inicial.
-- **Campanhas de nodes:** o cliente pode, por opt-in local desligado por padrão, ler eventos assinados de campanha e exibi-los separados do Hangout. A assinatura e os campos são validados, com links HTTPS e imagem inline limitada; a PWA não confirma pagamento nas redes Monero/Nano, não implementa aceite/cobrança/reembolso e não envia telemetria de clique/visualização.
+- **Campanhas de nodes:** o cliente pode, por opt-in local desligado por padrão, ler eventos assinados de campanha e exibi-los separados do Hangout. A assinatura e os campos são validados, com links HTTPS e imagem inline limitada; a PWA não confirma pagamento nas redes Bitcoin/Monero/Nano, não implementa aceite/cobrança/reembolso e não envia telemetria de clique/visualização.
 - **Marketplace:** a primeira versão publica e descobre ofertas no formato NIP-15. O padrão está em draft e marcado como não recomendado pela especificação atual; esta versão é uma experiência de compatibilidade. Compra, checkout, custódia e escrow não são implementados. O marketplace de produtos e o mercado de publicidade de nodes são capacidades distintas.
 - **Nodes:** preferência por nodes de PC para disponibilidade contínua; colaboração do navegador móvel é voluntária e limitada ao tempo em que o app permanecer ativo.
 - **Distribuição:** PWA utilizável em navegador e adicionável à tela inicial nos navegadores que suportarem a instalação. Não exigir publicação em loja ou root para o caminho principal.
@@ -64,6 +64,6 @@ O Pages é distribuição de arquivos, não backend. Mensagens e eventos vão di
 
 ## Plataformas e moedas
 
-O objetivo inclui Windows, macOS, Linux/Ubuntu, Android e iOS. O pacote de relay entregue é Linux x86_64; a PWA é a interface comum. Empacotamento nativo, instalação e operação em segundo plano exigem evidência separada por sistema. Android/iOS ainda não têm relay Property continuamente ativo validado.
+O objetivo inclui Windows, macOS, Linux/Ubuntu, Android e iOS. Os pacotes de relay incluem Linux x86_64, Windows x64 e macOS Apple Silicon; a PWA é a interface comum. Instalação e operação exigem evidência separada por sistema; Mac Intel e outras arquiteturas continuam pendentes. Android/iOS ainda não têm relay Property continuamente ativo validado.
 
-Ofertas declaram XMR ou XNO. Valores atômicos usam strings inteiras, sem conversão entre moedas ou cotação automática. Campanhas novas usam `property-sponsored-v2`; eventos legados XNO continuam legíveis. A especificação e os gates de pagamento estão em [pagamentos.md](pagamentos.md). Nenhum leitor ou hash declarado comprova liquidação.
+Ofertas declaram BTC, XMR ou XNO. Valores atômicos usam strings inteiras, sem conversão entre moedas ou cotação automática. Campanhas novas usam `property-sponsored-v2`; eventos legados XNO continuam legíveis. A especificação e os gates de pagamento estão em [pagamentos.md](pagamentos.md). Nenhum leitor ou hash declarado comprova liquidação.

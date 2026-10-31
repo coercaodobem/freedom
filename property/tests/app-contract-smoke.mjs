@@ -45,7 +45,7 @@ assert.match(sw, /property-shell-v5/);
 assert.match(app, /Campaigns\.selectSponsoredCampaigns/);
 assert.match(app, /campaigns-\$\{state\.pubkey\}/);
 assert.match(app, /noopener noreferrer/);
-assert.match(html, /não confirma pagamentos XMR ou XNO nas respectivas redes/i);
+assert.match(html, /não confirma pagamentos BTC, XMR ou XNO nas respectivas redes/i);
 assert.match(html, /id="show-node-campaigns" type="checkbox"/);
 assert.match(campaigns, /verifyEvent\(event\)/);
 assert.match(app, /navigator\.serviceWorker\.register/);

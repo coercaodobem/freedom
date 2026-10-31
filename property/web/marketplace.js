@@ -5,7 +5,7 @@
 
   function parsePrice(value, nanoUnits, selectedCurrency = 'XNO') {
     const match = typeof value === 'string' && value.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*([a-zA-Z]{2,12})?$/);
-    if (!match) throw new Error('Preço deve ser um decimal em XMR ou XNO.');
+    if (!match) throw new Error('Preço deve ser um decimal em BTC, XMR ou XNO.');
     const currency = (match[2] || selectedCurrency).toUpperCase();
     const decimal = match[1].replace(',', '.');
     const money = window.PropertyMoney;

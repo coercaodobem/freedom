@@ -15,6 +15,7 @@ for test_file in \
   forwarding-smoke.mjs \
   app-contract-smoke.mjs \
   relay-migration-smoke.mjs \
+  portable-packages-smoke.mjs \
   relay-package-smoke.mjs
 do
   printf '\n== %s ==\n' "$test_file"

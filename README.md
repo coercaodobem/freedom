@@ -1,6 +1,6 @@
 # Property
 
-Comunicação pela internet com Nostr, mensagens privadas criptografadas e identidade controlada pela pessoa. O Property é um projeto independente em desenvolvimento, com interface web instalável (PWA) e relay portátil para Ubuntu Linux x86_64, construído a partir de código do Amethyst.
+Comunicação pela internet com Nostr, mensagens privadas criptografadas e identidade controlada pela pessoa. O Property é um projeto independente em desenvolvimento, com interface web instalável (PWA) e relay portátil para Linux x86_64, Windows x64 e macOS Apple Silicon, construído a partir de código do Amethyst.
 
 **[Abrir o app](https://coercaodobem.github.io/property/) · [Como contribuir](CONTRIBUTING.md) · [Roadmap](ROADMAP.md) · [Reportar um problema](https://github.com/coercaodobem/property/issues/new/choose)**
 
@@ -10,7 +10,7 @@ Uma interface simples para conversar, postar e colaborar com uma rede de comunic
 
 PCs podem operar relays continuamente. A colaboração da PWA entre relays acontece enquanto o navegador está ativo. Android e iOS podem suspender uma PWA em segundo plano; manter um nó móvel permanentemente ativo ainda exige outra solução de plataforma, a desenvolver.
 
-O objetivo de plataforma inclui Windows, macOS, Linux/Ubuntu, Android e iOS. A interface web é o caminho comum; pacotes nativos de relay para os outros sistemas ainda estão no roadmap. A presença dos módulos upstream não comprova esses pacotes.
+O objetivo de plataforma inclui Windows, macOS, Linux/Ubuntu, Android e iOS. A interface web é o caminho comum. O relay inclui runtimes para Linux x86_64, Windows x64 e macOS Apple Silicon; os testes por sistema ficam registrados no plano. Outras arquiteturas e relay móvel contínuo exigem implementação própria.
 
 ## Estado atual: MVP em validação
 
@@ -19,9 +19,9 @@ O objetivo de plataforma inclui Windows, macOS, Linux/Ubuntu, Android e iOS. A i
 | Interface web | PWA publicada em HTTPS; arquivos de execução servidos do próprio pacote | Validação completa em Android/iOS e acessibilidade |
 | Identidade | Chave aleatória local, cofre cifrado por senha, sessão persistente e backup cifrado | Mais testes de recuperação e uso em aparelhos reais |
 | Mensagens | Fluxos NIP-17 e listas de inbox relays kind 10050, com testes locais | Validação ampliada de interoperabilidade e redes reais |
-| Relay de PC | Geode portátil para Ubuntu Linux x86_64, runtime Java incluído | Evidência completa do ensaio contínuo de 24 horas |
+| Relay de PC | Geode com runtime incluído para Linux x86_64, Windows x64 e macOS Apple Silicon | Validação por plataforma e ensaio contínuo de 24 horas |
 | Ponte voluntária | Encaminhamento limitado entre relays enquanto a PWA está ativa | Operação móvel contínua não é suportada pela PWA |
-| Marketplace e campanhas | Ofertas com preços XMR/XNO e leitor opcional de campanhas assinadas | Checkout e engine de aceite, pagamento XMR, XNO e reembolso |
+| Marketplace e campanhas | Ofertas com preços BTC/XMR/XNO e leitor opcional de campanhas assinadas | Checkout e engine de aceite, pagamento BTC, XMR, XNO e reembolso |
 | Hangout | Feed público kind 1 com leitura e publicação | Integração completa e validação para o Property |
 
 A publicação do app não significa que todo o plano foi concluído. Consulte o [plano de testes](property/docs/plano-de-testes-central.md) para resultados e limitações. Pagamentos e monetização automática de nodes não estão ativados nesta versão.
@@ -43,10 +43,16 @@ python3 -m http.server 8080 --directory property/web
 
 Acesse `http://localhost:8080`. Instalação como PWA exige HTTPS ou localhost. O shell pode abrir offline após a primeira carga; comunicação exige relays alcançáveis.
 
-Para iniciar o relay no Ubuntu Linux x86_64:
+Para iniciar o relay no Linux x86_64 ou macOS Apple Silicon:
 
 ```bash
 ./property/relay/start.sh
+```
+
+No Windows x64, pelo PowerShell na raiz do checkout:
+
+```powershell
+powershell -NoProfile -File .\property\relay\start.ps1
 ```
 
 O pacote inclui o runtime Java e verifica o SHA-256 antes da extração. Por padrão, o relay escuta somente em `127.0.0.1:7447`; publicar um relay na internet exige configuração própria de TLS, rede e armazenamento. Veja o [guia do relay](property/relay/README.md).

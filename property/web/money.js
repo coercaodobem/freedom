@@ -1,11 +1,12 @@
 'use strict';
 (() => {
   const CURRENCIES = Object.freeze({
+    BTC: Object.freeze({ decimals: 8, unit: 'satoshi', max: '2100000000000000' }),
     XNO: Object.freeze({ decimals: 30, unit: 'raw', max: ((1n << 128n) - 1n).toString() }),
     XMR: Object.freeze({ decimals: 12, unit: 'piconero', max: ((1n << 64n) - 1n).toString() })
   });
   function specification(currency) {
-    if (!Object.hasOwn(CURRENCIES, currency)) throw new Error('Escolha XMR ou XNO.');
+    if (!Object.hasOwn(CURRENCIES, currency)) throw new Error('Escolha BTC, XMR ou XNO.');
     return CURRENCIES[currency];
   }
   function validateAtomic(value, currency) {

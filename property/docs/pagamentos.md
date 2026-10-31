@@ -4,10 +4,11 @@ Atualizado em 2026-10-31. A mudança incorpora o requisito do commit `55e379c9db
 
 ## Implementado e planejado
 
-O cliente publica preços de ofertas em XMR ou XNO e lê campanhas assinadas que declaram essas moedas. Ele verifica formato e assinatura Nostr. Não contém carteira, checkout, cobrança, confirmação de blockchain ou reembolso automático. Referências de pagamento em campanhas são declarações do node; a interface não as apresenta como pagamentos verificados.
+O cliente publica preços de ofertas em BTC, XMR ou XNO e lê campanhas assinadas que declaram essas moedas. Ele verifica formato e assinatura Nostr. Não contém carteira, checkout, cobrança, confirmação de blockchain ou reembolso automático. Referências de pagamento em campanhas são declarações do node; a interface não as apresenta como pagamentos verificados.
 
 | Moeda | Unidade mínima | Unidades por moeda | Limite do campo inteiro |
 |---|---|---|---|
+| BTC (Bitcoin) | satoshi | 10⁸ | 21 milhões de BTC em satoshis |
 | XNO (Nano) | raw | 10³⁰ | uint128 |
 | XMR (Monero) | piconero | 10¹² | uint64 |
 
@@ -15,7 +16,7 @@ Conversões usam BigInt e strings decimais. Não há câmbio entre moedas. Os li
 
 ## Ofertas NIP-15
 
-O draft exige `price` numérico; esse campo é somente compatibilidade e pode perder precisão. O preço exato do Property é `price_atomic` como string inteira junto de `currency: "XNO"` ou `"XMR"`. Para XNO, publicar também `price_raw` para clientes antigos. Nunca interpretar `price_raw` como piconero. Cada moeda tem sua vitrine; mudar a moeda de uma oferta seleciona a vitrine correspondente. Checkout futuro deve usar exclusivamente o inteiro validado, sem calcular dinheiro com `Number`.
+O draft exige `price` numérico; esse campo é somente compatibilidade e pode perder precisão. O preço exato do Property é `price_atomic` como string inteira junto de `currency: "BTC"`, `"XNO"` ou `"XMR"`. Para XNO, publicar também `price_raw` para clientes antigos. Nunca interpretar `price_raw` como piconero. Cada moeda tem sua vitrine; mudar a moeda de uma oferta seleciona a vitrine correspondente. Checkout futuro deve usar exclusivamente o inteiro validado, sem calcular dinheiro com `Number`.
 
 ## Campanhas
 
@@ -41,3 +42,9 @@ O leitor aceita também `liberdade-sponsored-v1`, estritamente como XNO, com `am
 5. Reembolsos idempotentes e retomáveis, com reconciliação de recebimento, taxa e valor líquido. Monero não revela um endereço de origem utilizável para devolução: obter endereço de reembolso autenticado no acordo. Nunca copiar a regra Nano de devolver automaticamente à origem para XMR.
 6. Não prometer custo zero ou viabilidade de micropagamento em XMR: definir mínimo e política de taxas com evidência. Sem fundos de produção nos testes.
 7. Usar Nano testnet/local e Monero regtest/stagenet; testar pagamento duplicado, atraso, valor/moeda errados, carteira não sincronizada, falhas, reorganização, expiração e devolução. Somente ativar após testes e revisão independente.
+
+## Bitcoin
+
+BTC foi incluído por solicitação posterior do mantenedor. Valores usam satoshis inteiros (8 casas), até 21 milhões de BTC. Ofertas e campanhas v2 aceitam a moeda; isso não ativa transferências. Referência: [unidades Bitcoin](https://bitcoin.org/en/vocabulary).
+
+O adaptador futuro Bitcoin deve usar endereço exclusivo por oferta, confirmar via node/carteira local, verificar valor e output, tratar mempool, confirmações, substituição/conflitos e reorganizações. O txid declarado não comprova o recebimento. Reembolsos exigem endereço autenticado acordado com o pagador e política explícita de taxas/valor líquido, sem presumir endereço de origem. Testar em regtest/signet sem fundos reais. Lightning é um fluxo separado e ainda não está implementado; não confundir satoshi on-chain com millisatoshi.

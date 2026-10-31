@@ -7,7 +7,7 @@ vm.createContext(context);
 vm.runInContext(await readFile(new URL('../web/money.js', import.meta.url), 'utf8'), context);
 const M = context.window.PropertyMoney;
 for (const [currency, scale, max] of [
-  ['XNO', 30, (1n << 128n) - 1n], ['XMR', 12, (1n << 64n) - 1n]
+  ['BTC', 8, 2100000000000000n], ['XNO', 30, (1n << 128n) - 1n], ['XMR', 12, (1n << 64n) - 1n]
 ]) {
   assert.equal(M.toAtomic('1', currency), (10n ** BigInt(scale)).toString());
   assert.equal(M.toAtomic(`0.${'0'.repeat(scale - 1)}1`, currency), '1');
@@ -21,4 +21,4 @@ for (const [currency, scale, max] of [
 }
 assert.throws(() => M.toAtomic('1', 'USD'));
 assert.throws(() => M.toAtomic('1', '__proto__'));
-console.log('PASS: XMR/piconero e XNO/raw exatos, limites, precisão e rejeição de moedas/unidades inválidas');
+console.log('PASS: BTC/satoshi, XMR/piconero e XNO/raw exatos, limites, precisão e rejeição de moedas/unidades inválidas');

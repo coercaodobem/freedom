@@ -1,0 +1,129 @@
+{
+  "checked_at": "2026-10-31T08:42:59.563481+00:00",
+  "base_url": "https://coercaodobem.github.io/property/",
+  "source_commit": "2a67c7573196d1f2a7fcb10e0cbc976a0dea2bfe",
+  "pages_run_id": 41185635326,
+  "ci_run_id": 41185635324,
+  "files": [
+    {
+      "path": "about.html",
+      "http_status": 200,
+      "expected_sha256": "fa2d1d3367276280afd4e3abb6f6ea000189832e6f7db260a6b9948713cf6ca7",
+      "served_sha256": "fa2d1d3367276280afd4e3abb6f6ea000189832e6f7db260a6b9948713cf6ca7",
+      "matches": true
+    },
+    {
+      "path": "app.js",
+      "http_status": 200,
+      "expected_sha256": "5903191b338b043067272fb6aa7114da3b6106d50dfe4ce0b554eeb12b2628c1",
+      "served_sha256": "5903191b338b043067272fb6aa7114da3b6106d50dfe4ce0b554eeb12b2628c1",
+      "matches": true
+    },
+    {
+      "path": "assets/icon.svg",
+      "http_status": 200,
+      "expected_sha256": "ee4b8a60649a9eec1d62469d790542bc88021290c28262a52160fe6dc5c6b9f5",
+      "served_sha256": "ee4b8a60649a9eec1d62469d790542bc88021290c28262a52160fe6dc5c6b9f5",
+      "matches": true
+    },
+    {
+      "path": "campaigns.js",
+      "http_status": 200,
+      "expected_sha256": "d15dde4c808542693a86e870d409f6fb26173c5492dbf89be56d79c33c9fd75b",
+      "served_sha256": "d15dde4c808542693a86e870d409f6fb26173c5492dbf89be56d79c33c9fd75b",
+      "matches": true
+    },
+    {
+      "path": "forwarding.js",
+      "http_status": 200,
+      "expected_sha256": "5136af32c548db3af9d5b0780573a5613a0c29d9e7e0b4363306866562c0e2bd",
+      "served_sha256": "5136af32c548db3af9d5b0780573a5613a0c29d9e7e0b4363306866562c0e2bd",
+      "matches": true
+    },
+    {
+      "path": "index.html",
+      "http_status": 200,
+      "expected_sha256": "6d43e0cfd5ba259d6ddceb8b887c0e29299c2183397fe6e723b5173b7984267e",
+      "served_sha256": "6d43e0cfd5ba259d6ddceb8b887c0e29299c2183397fe6e723b5173b7984267e",
+      "matches": true
+    },
+    {
+      "path": "manifest.webmanifest",
+      "http_status": 200,
+      "expected_sha256": "9ae41f35ce8862a1c48060b73f35749685d5dc749a643d1efd70a7db3b66584d",
+      "served_sha256": "9ae41f35ce8862a1c48060b73f35749685d5dc749a643d1efd70a7db3b66584d",
+      "matches": true
+    },
+    {
+      "path": "marketplace.js",
+      "http_status": 200,
+      "expected_sha256": "257c2e4b20e7bdd8461df249ff45fd9c82c77760bb5783e17bd2285001fdc521",
+      "served_sha256": "257c2e4b20e7bdd8461df249ff45fd9c82c77760bb5783e17bd2285001fdc521",
+      "matches": true
+    },
+    {
+      "path": "money.js",
+      "http_status": 200,
+      "expected_sha256": "dacdd7e2096dd140ef13c7f3b5c7a3478fb2b0b1d722e36d55156125a308dacb",
+      "served_sha256": "dacdd7e2096dd140ef13c7f3b5c7a3478fb2b0b1d722e36d55156125a308dacb",
+      "matches": true
+    },
+    {
+      "path": "nano.js",
+      "http_status": 200,
+      "expected_sha256": "e13b04e9c0839c07ed200eebe9dbeee4e25a267e2fa94b6c8eee79ee88528d7c",
+      "served_sha256": "e13b04e9c0839c07ed200eebe9dbeee4e25a267e2fa94b6c8eee79ee88528d7c",
+      "matches": true
+    },
+    {
+      "path": "routing.js",
+      "http_status": 200,
+      "expected_sha256": "723d7a7db063a2d3c33f0f0e1da3f4c9bb9252c9323069deaec872552af8d62f",
+      "served_sha256": "723d7a7db063a2d3c33f0f0e1da3f4c9bb9252c9323069deaec872552af8d62f",
+      "matches": true
+    },
+    {
+      "path": "styles.css",
+      "http_status": 200,
+      "expected_sha256": "ee36d195754894cbebfa8ca0df9d89da9b306beb4b4ab8be94374a8c07ec321a",
+      "served_sha256": "ee36d195754894cbebfa8ca0df9d89da9b306beb4b4ab8be94374a8c07ec321a",
+      "matches": true
+    },
+    {
+      "path": "sw.js",
+      "http_status": 200,
+      "expected_sha256": "076506cfbb2ffef8e1ad7551b08cd834a85f9f9fe6a8f2d3546be1f2b6e55dd3",
+      "served_sha256": "076506cfbb2ffef8e1ad7551b08cd834a85f9f9fe6a8f2d3546be1f2b6e55dd3",
+      "matches": true
+    },
+    {
+      "path": "vault.js",
+      "http_status": 200,
+      "expected_sha256": "437fee86397db747d487b186e6713962a1c84855da29e43d371db78ee16f0846",
+      "served_sha256": "437fee86397db747d487b186e6713962a1c84855da29e43d371db78ee16f0846",
+      "matches": true
+    },
+    {
+      "path": "vendor/README.md",
+      "http_status": 200,
+      "expected_sha256": "31622a7ae4b154c9fc96b8884c65335f088b36686b3daa010fd733a3452dff64",
+      "served_sha256": "31622a7ae4b154c9fc96b8884c65335f088b36686b3daa010fd733a3452dff64",
+      "matches": true
+    },
+    {
+      "path": "vendor/nostr-tools-2.25.2.bundle.js",
+      "http_status": 200,
+      "expected_sha256": "a7c4846fde84a0d6ce7596f3fcfc88435d29fdcd616887205ab97f9a16bc6407",
+      "served_sha256": "a7c4846fde84a0d6ce7596f3fcfc88435d29fdcd616887205ab97f9a16bc6407",
+      "matches": true
+    },
+    {
+      "path": "vendor/nostr-tools-LICENSE",
+      "http_status": 200,
+      "expected_sha256": "f0510d3b9d1223c45e8fdd2b49270ec8734fff491c7f7d1b948ee70162e1ceff",
+      "served_sha256": "f0510d3b9d1223c45e8fdd2b49270ec8734fff491c7f7d1b948ee70162e1ceff",
+      "matches": true
+    }
+  ],
+  "all_match": true
+}

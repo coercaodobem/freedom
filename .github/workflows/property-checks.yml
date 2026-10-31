@@ -32,3 +32,26 @@ jobs:
           node-version: '22'
       - name: Validar produto com fixtures locais
         run: bash property/tests/run-smoke.sh
+
+  native-relay:
+    name: Relay nativo (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            property
+            .github
+      - name: Node.js 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Relay com runtime incluído e dados persistentes
+        run: node property/tests/native-relay-integration.mjs

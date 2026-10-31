@@ -6,7 +6,7 @@ Atualizado em 2026-10-31. Este mapa orienta contribuições; não é promessa de
 
 - PWA em HTTPS, cofre local por senha e backup cifrado.
 - Mensagens NIP-17 e listas de inbox relays kind 10050, com validações locais.
-- Relay Geode portátil para Ubuntu Linux x86_64.
+- Relay Geode com runtime para Linux x86_64, Windows x64 e macOS Apple Silicon, com testes de integração por plataforma.
 - Ponte voluntária enquanto a PWA está ativa.
 - Fluxos iniciais de ofertas e leitura opcional de campanhas assinadas.
 
@@ -25,9 +25,9 @@ Consulte os resultados registrados; a presença de código não comprova todos o
 
 ## Funcionalidades que exigem implementação e revisão
 
-- Marketplace completo e checkout XMR/XNO, com taxas, confirmação e reembolso específicos de cada moeda.
-- Relay empacotado para Windows, macOS e outras arquiteturas Linux; avaliar solução nativa Android/iOS sem root e sem exigir tela acesa.
-- Engine local de campanhas: oferta, aceite, endereço exclusivo, confirmação XMR/XNO por adaptadores independentes, expiração e reembolso idempotente.
+- Marketplace completo e checkout BTC/XMR/XNO, com taxas, confirmação e reembolso específicos de cada moeda.
+- Relay para Mac Intel e outras arquiteturas Linux; avaliar solução nativa Android/iOS sem root e sem exigir tela acesa.
+- Engine local de campanhas: oferta, aceite, endereço exclusivo, confirmação BTC/XMR/XNO por adaptadores independentes, expiração e reembolso idempotente.
 - Hangout integrado e validado para o Property.
 - Solução de plataforma para colaboração móvel contínua; uma PWA não garante execução permanente com a tela apagada.
 

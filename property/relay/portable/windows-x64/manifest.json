@@ -1,0 +1,488 @@
+{
+  "format": 1,
+  "platform": "windows-x64",
+  "geode_version": "1.20.0",
+  "java_version": "21.0.13+9",
+  "runtime_source": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jre_x64_windows_hotspot_21.0.13_9.zip",
+  "runtime_source_sha256": "2332c0b4cff6bed722da3567c91d5e47568bcba863fa4945d0a8d6fc76158628",
+  "geode_source_sha256": "9722c226dc59c45d50f9f8c1e22ad815fd6fb971413c7da3aa7fc36253e6d1a7",
+  "archive_sha256": "f6572a19f26bbd6ec6f6b57a7d876dc18e90e14572abbae8b07351d9269c03a3",
+  "archive_bytes": 89033587,
+  "parts": [
+    {
+      "file": "part-000",
+      "bytes": 1048576,
+      "sha256": "d0d82907990f7fb70bec03b6279cd663327a65086b82064291bfcce1d1d8ff97"
+    },
+    {
+      "file": "part-001",
+      "bytes": 1048576,
+      "sha256": "b4603e8aa7a1908d4cb30cc2df3a4e5703120555d60d116a9bfc8755338e078e"
+    },
+    {
+      "file": "part-002",
+      "bytes": 1048576,
+      "sha256": "f8a150bfb71733c069ff09c58de8ea9851008fdbcf45faaa9e21b44eeb34ca43"
+    },
+    {
+      "file": "part-003",
+      "bytes": 1048576,
+      "sha256": "4b9be656810328a22ebefe7365fe8986ef49f6489c05008a5eba1d7b90b52e2e"
+    },
+    {
+      "file": "part-004",
+      "bytes": 1048576,
+      "sha256": "b879072aabeb844754e1b8bb71475cf60c6958c6e9376a55b313e39f270ec4fd"
+    },
+    {
+      "file": "part-005",
+      "bytes": 1048576,
+      "sha256": "36fa3c0f3e00f25d51ff9d83577ca71619e032fb461dcc7a6aaee779222981ec"
+    },
+    {
+      "file": "part-006",
+      "bytes": 1048576,
+      "sha256": "20420746b325c169bd451596ed4c16f55b51aaa85414ff2c0bee1a10e36a9823"
+    },
+    {
+      "file": "part-007",
+      "bytes": 1048576,
+      "sha256": "74fb9ad3e38159dbb415dce40c1fc58460117b7f5d89daa313761ab2ebc3f491"
+    },
+    {
+      "file": "part-008",
+      "bytes": 1048576,
+      "sha256": "436e375d40c08b4863f6d292ce333ea7cd1262efae558112a0460300396c6730"
+    },
+    {
+      "file": "part-009",
+      "bytes": 1048576,
+      "sha256": "2d318fafc33d3b0d02ad9f49224b31a156e990346e3d3a7060e0daf409512d40"
+    },
+    {
+      "file": "part-010",
+      "bytes": 1048576,
+      "sha256": "3743d8c19adf64bee56cff522aee421c23b955961ae570d661f3b467d96f4712"
+    },
+    {
+      "file": "part-011",
+      "bytes": 1048576,
+      "sha256": "f29002d56c903cdb9d7ba8a871ac3a650a8641ef7aef794c3d9d315541638bc8"
+    },
+    {
+      "file": "part-012",
+      "bytes": 1048576,
+      "sha256": "159efc7ae148e02d944ddd89d814bb4bee7d9c58aeb3f5db17f392d7df4eae20"
+    },
+    {
+      "file": "part-013",
+      "bytes": 1048576,
+      "sha256": "6e10ace974477a33967b98f39163cea479d5d9f8a9fd29c654dac12932d450bc"
+    },
+    {
+      "file": "part-014",
+      "bytes": 1048576,
+      "sha256": "055783676f5cfc6b159c84c43ff10e5be06e58c38d243050fc28db77216d2c1d"
+    },
+    {
+      "file": "part-015",
+      "bytes": 1048576,
+      "sha256": "21d068a39f57ebd7d67d5c03b8fcf36f7ed11cf41a98346d654d30e33452c760"
+    },
+    {
+      "file": "part-016",
+      "bytes": 1048576,
+      "sha256": "69b887bd5ffb4448289dc5dbe185a6c7f0e9174fa0468977d57487592ae0b265"
+    },
+    {
+      "file": "part-017",
+      "bytes": 1048576,
+      "sha256": "003790928e47657d323525858f2d5924263c9a77abbf3557347b8d84f0571bb2"
+    },
+    {
+      "file": "part-018",
+      "bytes": 1048576,
+      "sha256": "35ca1e99d28e87ac4f0805e558ddc81248b2a6562dc20091f871192871810707"
+    },
+    {
+      "file": "part-019",
+      "bytes": 1048576,
+      "sha256": "8204b9b5bb837abe17ba67391fc09402f331a6b989a566b3441a7922a9960473"
+    },
+    {
+      "file": "part-020",
+      "bytes": 1048576,
+      "sha256": "2f62a28fad48e5f89949fa16e8a89c57bcd697c0676b658a57842e4295428398"
+    },
+    {
+      "file": "part-021",
+      "bytes": 1048576,
+      "sha256": "5579cebee2296aa1157a3f60cd3a6553bb70c00e96227cd5bf49a9121983438d"
+    },
+    {
+      "file": "part-022",
+      "bytes": 1048576,
+      "sha256": "769a9d332b0c3341c8b26cb21c96f041e32d4c9ef6a7c58eca22bdb77e461f77"
+    },
+    {
+      "file": "part-023",
+      "bytes": 1048576,
+      "sha256": "2987adfe2dadcdb91e76bbd5eda96334bd8bc02f417baee7e605b1cf231d3b31"
+    },
+    {
+      "file": "part-024",
+      "bytes": 1048576,
+      "sha256": "5f906a9acd63509edf860163b24764be4871fdde37e3fc8684cfade632f52837"
+    },
+    {
+      "file": "part-025",
+      "bytes": 1048576,
+      "sha256": "d16d390a50c036c9e449ff078b5b63432be27bf65a237d606b071ee757b4bc6c"
+    },
+    {
+      "file": "part-026",
+      "bytes": 1048576,
+      "sha256": "a53d26a3042df35b41e7981139e37f189060e1bd4c586be09fc04011f96040b9"
+    },
+    {
+      "file": "part-027",
+      "bytes": 1048576,
+      "sha256": "ecd68ac75af80b9f9d9e078b93a5c1f877268d264007770813dbffab78176dc5"
+    },
+    {
+      "file": "part-028",
+      "bytes": 1048576,
+      "sha256": "58ad630214bdfe3c9716de183873db18896aeb15e962fa0b7c21eaf18d6276d8"
+    },
+    {
+      "file": "part-029",
+      "bytes": 1048576,
+      "sha256": "6f94e001abab64da3fa2ba464e66793fc1a31212e099687cb0fe1449c2463624"
+    },
+    {
+      "file": "part-030",
+      "bytes": 1048576,
+      "sha256": "cf67c259539bf821619201e42335734da3850c798fe96f7ee7956a669ea533ff"
+    },
+    {
+      "file": "part-031",
+      "bytes": 1048576,
+      "sha256": "fa395238540fd884b1315ee2fa53e1f06dc508cce96cfeb67b366953577de46f"
+    },
+    {
+      "file": "part-032",
+      "bytes": 1048576,
+      "sha256": "31badf29dc1e9ba3eb10ff8d67af6e52aca764f8a04b7c9ed77ce1a0413cd958"
+    },
+    {
+      "file": "part-033",
+      "bytes": 1048576,
+      "sha256": "cbbb454785cc8d310fe738b6117a17ecd7deeb63cc70d8ee429d05cc0ec97660"
+    },
+    {
+      "file": "part-034",
+      "bytes": 1048576,
+      "sha256": "b333d029ed0db80c746fde826e8057a4ae330984f2bfc04616aa782d302bb68c"
+    },
+    {
+      "file": "part-035",
+      "bytes": 1048576,
+      "sha256": "4cba6afe41191fc66a8cd78e61b4cd96fcbc57c27a87f1f8ee2beee4854282a5"
+    },
+    {
+      "file": "part-036",
+      "bytes": 1048576,
+      "sha256": "40c62d855cbe5c788da98d672843a15896c3b4b1e8c75613cf48955017753ab0"
+    },
+    {
+      "file": "part-037",
+      "bytes": 1048576,
+      "sha256": "c20dd887b9e48e92dc4a01fb0fc4029de1bb08c8f487742ba5a291cbacea9466"
+    },
+    {
+      "file": "part-038",
+      "bytes": 1048576,
+      "sha256": "c0840ab3fc9867d498bb0f90a1135a8b719ffda59b6c6eefa1d7d2b296ae38d3"
+    },
+    {
+      "file": "part-039",
+      "bytes": 1048576,
+      "sha256": "39b5c8994fa2364697a7e15592ee2bb956094494429aa269c6bcd2c49efd85af"
+    },
+    {
+      "file": "part-040",
+      "bytes": 1048576,
+      "sha256": "e162e28240650165c3acb1c0900ba88a87bb3e2383ef40ffe97a277c27382157"
+    },
+    {
+      "file": "part-041",
+      "bytes": 1048576,
+      "sha256": "f075e6e85683f492af6f380223c3ad2b38b2842cbdd9f96d2d94e08314caddc0"
+    },
+    {
+      "file": "part-042",
+      "bytes": 1048576,
+      "sha256": "9fad3487b89d9e35a6589fac5aff248087545ff4afeda86b42636a9002f89597"
+    },
+    {
+      "file": "part-043",
+      "bytes": 1048576,
+      "sha256": "cd74eeedaf4bc61574ff3ff95cb80ce66027b80caec73fcaabb22134c55392d7"
+    },
+    {
+      "file": "part-044",
+      "bytes": 1048576,
+      "sha256": "6d7eb29019745fb36c0bcacd3df3ee1306a0e3442bd948035d12c69abf078442"
+    },
+    {
+      "file": "part-045",
+      "bytes": 1048576,
+      "sha256": "888f05c634b9f1815d4ab06e070acaea5f4be27a72c2b4d707eb9a53acebe42a"
+    },
+    {
+      "file": "part-046",
+      "bytes": 1048576,
+      "sha256": "440ebd215b7e8f97a7b790f1e40b460d7ce068dcd6a39bcd66a08c686a155369"
+    },
+    {
+      "file": "part-047",
+      "bytes": 1048576,
+      "sha256": "0543e6d15ad84cc9531effab3a6f78c05a4332ee367bf53a04892bddfa54e94c"
+    },
+    {
+      "file": "part-048",
+      "bytes": 1048576,
+      "sha256": "35a5427d78a4340ed828cd7585c1039ac800d50a6383f0913209ae9a7847d6f0"
+    },
+    {
+      "file": "part-049",
+      "bytes": 1048576,
+      "sha256": "171d110f42ae178d98155f370a3730ceae4bd4f0e331f8132fefa6bcd96a5e67"
+    },
+    {
+      "file": "part-050",
+      "bytes": 1048576,
+      "sha256": "9cd59994be2497211f1c765d3ee318aa7532249ff07672917b68832b80136e9b"
+    },
+    {
+      "file": "part-051",
+      "bytes": 1048576,
+      "sha256": "5214a81c7cba5b98acbaa16ace60cb032f256fd158d81c4c93b0d812891723f0"
+    },
+    {
+      "file": "part-052",
+      "bytes": 1048576,
+      "sha256": "de6ce910fd571e562c7b2eeb4eabf7878433acf2dc01db7ee02ce3fe7cb9ef4b"
+    },
+    {
+      "file": "part-053",
+      "bytes": 1048576,
+      "sha256": "09041b9479291fc9ace5fcd66d17fc1c68024224d22122c46383508a32084e47"
+    },
+    {
+      "file": "part-054",
+      "bytes": 1048576,
+      "sha256": "b5dc59ba4b4fb24f5abd8a32bbe63d54b077b5bbb3b5e217ac12bea597c40805"
+    },
+    {
+      "file": "part-055",
+      "bytes": 1048576,
+      "sha256": "f360117e9da5715e9db6892d8de7ec6791e3a3e4f42864d7dbca986d3d046627"
+    },
+    {
+      "file": "part-056",
+      "bytes": 1048576,
+      "sha256": "90486d273b4619de68cbe9052eeb37ed0734d35cbbd15dd2fc14be6759da80db"
+    },
+    {
+      "file": "part-057",
+      "bytes": 1048576,
+      "sha256": "4f81fd31b25886795474a876f7444b5828376f3a097ba337724de10cc1bbabdc"
+    },
+    {
+      "file": "part-058",
+      "bytes": 1048576,
+      "sha256": "27c3c98772f9682fa852acb1644523adc52ca95ea4764536e98e5747465912d8"
+    },
+    {
+      "file": "part-059",
+      "bytes": 1048576,
+      "sha256": "241a844bf2cabbe2db21180ed9cfc7d1dc59441568953f223e6e138c5c9d8e23"
+    },
+    {
+      "file": "part-060",
+      "bytes": 1048576,
+      "sha256": "8dd59239c6d3af724a15dfa6a5858429ca0cc6319d845656b2f49260ca416133"
+    },
+    {
+      "file": "part-061",
+      "bytes": 1048576,
+      "sha256": "8337204772ee91fc94a57c90f28f0e23e7af7e6b71d9725a11b5d151e5e094f7"
+    },
+    {
+      "file": "part-062",
+      "bytes": 1048576,
+      "sha256": "fada017c0a939e6b3bbfa0121af64a046462dc2bd8f32ed80962784248e3daf4"
+    },
+    {
+      "file": "part-063",
+      "bytes": 1048576,
+      "sha256": "dcf0bcf0c8101fe74eed4834afd4d343da3b2aa16b06718bfa981fb7650e5e91"
+    },
+    {
+      "file": "part-064",
+      "bytes": 1048576,
+      "sha256": "bdb55976f4277042aba91cff214a5e8376ea02ecc74bd711b97e63f361e0e118"
+    },
+    {
+      "file": "part-065",
+      "bytes": 1048576,
+      "sha256": "6c3aca8f3c72081d0bacd6057a9514a2922fe06fc8eadd932b175d8af294d5fc"
+    },
+    {
+      "file": "part-066",
+      "bytes": 1048576,
+      "sha256": "70d337bb897fa16d16ee9c5d0c22260ff185d9a275492e3aef90a0e859cc0ed7"
+    },
+    {
+      "file": "part-067",
+      "bytes": 1048576,
+      "sha256": "d848c0072b8cc1745d41aa7352a2846d5d0d514d9b62a0c1e4a95a3af94e981e"
+    },
+    {
+      "file": "part-068",
+      "bytes": 1048576,
+      "sha256": "3613369c60d12b4e246a7618ffff12310615b55fbac61ce22ec1c5bd3765bb93"
+    },
+    {
+      "file": "part-069",
+      "bytes": 1048576,
+      "sha256": "3aa83a581340c74087808bb8ea46111063cd02456c86ea7ee73af71730fa0e5e"
+    },
+    {
+      "file": "part-070",
+      "bytes": 1048576,
+      "sha256": "a8076a719b17435070b87833fb62cc08c9074d0183a8b0f6a601a0627dcd3598"
+    },
+    {
+      "file": "part-071",
+      "bytes": 1048576,
+      "sha256": "cfb7f5bf95605d3da95e9264d29413966e4880220f05c478803b58cbd3d21047"
+    },
+    {
+      "file": "part-072",
+      "bytes": 1048576,
+      "sha256": "a82c357cb2beea09528731f0448f18e95ba2bc9ee792e0c3da3326154800c4f7"
+    },
+    {
+      "file": "part-073",
+      "bytes": 1048576,
+      "sha256": "3adb4082ee8b19e0be0bf5d1dd2635363b5612ba9b875613456b21edeff1923c"
+    },
+    {
+      "file": "part-074",
+      "bytes": 1048576,
+      "sha256": "b51672ff0870a0f4db32448fb0fbd8009f6846d3c346e4bbdc338d27d417a8c7"
+    },
+    {
+      "file": "part-075",
+      "bytes": 1048576,
+      "sha256": "915238f2d3a838f1597c624534c9f4e9ee5ec3881c738f5a4c4d8943224b79fb"
+    },
+    {
+      "file": "part-076",
+      "bytes": 1048576,
+      "sha256": "dd96ae40a4a1ce868e1b65f8817171067f38f7e4f7243f7c5c37d50adbf4150a"
+    },
+    {
+      "file": "part-077",
+      "bytes": 1048576,
+      "sha256": "450a1e37538540ca52cac439304737f23f08c0219649d753f5d09af93643513f"
+    },
+    {
+      "file": "part-078",
+      "bytes": 1048576,
+      "sha256": "63753f6019918054a1b95325f30100707a7338405042dd3e0ee2c7f4e855ade3"
+    },
+    {
+      "file": "part-079",
+      "bytes": 1048576,
+      "sha256": "333e6e41f3401d958d0f6283e75f19eecbdaad7d0f202a79340bc1cc025339a2"
+    },
+    {
+      "file": "part-080",
+      "bytes": 1048576,
+      "sha256": "d35419687af193b19899db995f57b6d2b1ae5426892bc44e58940fadb926306e"
+    },
+    {
+      "file": "part-081",
+      "bytes": 1048576,
+      "sha256": "5726f2162bbefadcc59a6b6c67e88d559fed16ae66d85f0076f8bdccbba714e8"
+    },
+    {
+      "file": "part-082",
+      "bytes": 1048576,
+      "sha256": "e0b48057a8d0c34bc3c919a7eb07a6dec7126981d645f2ee17f56f06c9bf9f26"
+    },
+    {
+      "file": "part-083",
+      "bytes": 1048576,
+      "sha256": "45b4c4fad22c82fefce0bcdcfdcf152521a8f98c7490c34384b93e0c4cacd7b1"
+    },
+    {
+      "file": "part-084",
+      "bytes": 953203,
+      "sha256": "67e336964bbf7b7154e443c16de960952aeb1315417b20f5fc046aba9caa492d"
+    }
+  ],
+  "libraries": {
+    "geode/lib/4koma-1.2.0.jar": "1b68f3e53bfcb2f04c209016c684557886095f16e14d165edc3738293a962df0",
+    "geode/lib/annotation-jvm-1.9.1.jar": "1e343917ebf27ba96fe4dc52b1cad7fd32b738fbc6355bb6cd5b3b305d7212d0",
+    "geode/lib/annotations-23.0.0.jar": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05",
+    "geode/lib/collection-jvm-1.7.0.jar": "3f53cacff8421a11cd659a0ca5e914ae605cafe6ad72970633b986a152476649",
+    "geode/lib/config-1.4.9.jar": "47d13e3196c84f2a8ccd014ae563738c3da5b7406b38e03505ec0601a2f4fc37",
+    "geode/lib/crypto-jvm.jar": "c455877c16a82f9494ed38d48836390a14ec161d15cab4969fdfbd092e21822b",
+    "geode/lib/geode-1.20.0.jar": "cf8ea3399d2985f07b6df7559cafe2df43380950e1200723c200fd435f9568c7",
+    "geode/lib/jspecify-1.0.0.jar": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab",
+    "geode/lib/konbini-jvm-0.1.3.jar": "3332ba0be9f8cec87894836ffb850ede9b2601f1f06f987fd981502f272831aa",
+    "geode/lib/kotlin-reflect-2.3.21.jar": "33e37d9dfa86c7a29ab34e975b5f4a1287b458878611051f3485652220c1a2cb",
+    "geode/lib/kotlin-stdlib-2.4.21.jar": "bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3",
+    "geode/lib/kotlin-stdlib-jdk7-1.8.10.jar": "a843aae0b7232448afc6af05747cd4de416b9c2b76e100a1b07b1f788337b2ed",
+    "geode/lib/kotlin-stdlib-jdk8-1.8.10.jar": "9622f67cbe41e88ad257c1b8018054dd021a6044162474a78b1becd44f15a169",
+    "geode/lib/kotlinx-collections-immutable-jvm-0.5.2.jar": "6d7f84d544644fa857bba83292820cdb1e0dae408fa41d2dced903d290286463",
+    "geode/lib/kotlinx-coroutines-core-jvm-1.11.0.jar": "d1d75aa01dffbb4d1c520e67e4c4e7f5f6174718e7cb4632412503f2f0e604fa",
+    "geode/lib/kotlinx-io-bytestring-jvm-0.9.1.jar": "8589de0b7c476bfdd02a24641685f609ade72f5e595cf2909c168acdba7e6ba4",
+    "geode/lib/kotlinx-io-core-jvm-0.9.1.jar": "765d8851d8ca694706931331b92386844800867e041b720f1f193dbda874d370",
+    "geode/lib/kotlinx-serialization-cbor-jvm-1.12.0.jar": "8892e8a5bcaec488b75c2a3aa4674995c08d616f8ca0028c0bce57d27ef4c573",
+    "geode/lib/kotlinx-serialization-core-jvm-1.12.0.jar": "bcfddcac76159058ba0953af05938c17111d238cd41be7191874656454d62f1a",
+    "geode/lib/kotlinx-serialization-json-jvm-1.12.0.jar": "879eb73e46cb63253ab0fa7cca4448f5c96bca1a16ff377abcb71ebab60e0631",
+    "geode/lib/ktor-events-jvm-3.6.0.jar": "d3962f4a4244102d1ef8b84b21429ffc26be3512b5f1f96c607265ca1cec5c0b",
+    "geode/lib/ktor-http-cio-jvm-3.6.0.jar": "4cabe83cb367e0a807f849f2d4313b9de563cffcec0d262844a783d51a47738d",
+    "geode/lib/ktor-http-jvm-3.6.0.jar": "2a14cb160436b134c10793727aeed3055ae7014ff170c79ffbcd90b26dd90de2",
+    "geode/lib/ktor-io-jvm-3.6.0.jar": "7426ad1759833460507ee7065f17085410dc7b32081a1daee8c91cf6f40e257c",
+    "geode/lib/ktor-network-jvm-3.6.0.jar": "746a751146d61865f51d6dd56b18e3e0fa68b36587561ee123ff7ce730d8c590",
+    "geode/lib/ktor-serialization-jvm-3.6.0.jar": "d67f46cf64f8c97a2e14d4d5c0c1a4be315c8bc128bcc58370c0716363c258db",
+    "geode/lib/ktor-server-cio-jvm-3.6.0.jar": "319e4a03717e39ab9a5be8cb5a7b7d5327627ad3d55ff43270935372d7c13d16",
+    "geode/lib/ktor-server-core-jvm-3.6.0.jar": "2838b5d739cb659947ab11b0b220581ad077da8adf62a0248e30c0cdbb93192e",
+    "geode/lib/ktor-server-websockets-jvm-3.6.0.jar": "228336824cde03f02374b0a2d23a243470051d58d11cf9d235ebdcf126ef22d9",
+    "geode/lib/ktor-utils-jvm-3.6.0.jar": "05698e23c0539c7042676a98557e3358e77e19efa9fa4fc2145f20ad8721aefc",
+    "geode/lib/ktor-websocket-serialization-jvm-3.6.0.jar": "c87fe370c17868dc8c101947452bf8a8622363cf4d83a342334666bb46fe627b",
+    "geode/lib/ktor-websockets-jvm-3.6.0.jar": "3ef8b5d544dc7f9bd041a245bb8c2ff6647d0fd1e111a65b7be54977476a5464",
+    "geode/lib/negentropy-jvm.jar": "15eeec6c6e349c710e9a6303ff2ab003861c47ef4db8a22e02da5c8ca1588ef1",
+    "geode/lib/okhttp-coroutines-5.5.1.jar": "efa0b33d0673d8327732ffe4edfed57807ade51d21e90547aab1569759d89005",
+    "geode/lib/okhttp-jvm-5.5.1.jar": "4039527bd1f2e40b66e20b0e52c689cf56074b938ea02678141495f5160f1047",
+    "geode/lib/okio-jvm-3.18.1.jar": "b97b640557a650d15411f2be29aef558c4e422a83653cb18ba494311dbed18be",
+    "geode/lib/quartz-jvm.jar": "4e8c9b09ad6fe41e3ce71616e0570cc526fc9c28e937ef72bf7618974f59a9f3",
+    "geode/lib/runtime-annotation-jvm-1.12.1.jar": "e291a6ae01ab71a7f48a568ec9744c6bf9b3f46ef72fbcdeb28c3407ae531c5e",
+    "geode/lib/secp256k1-kmp-jni-common-0.24.0.jar": "1bbb5bf58ecfa5a2ff499f621721387ef9b1df62b0786f5c3799c3d90410feba",
+    "geode/lib/secp256k1-kmp-jni-jvm-0.24.0.jar": "de9c8516d15af01b61a32f8723425624d3a4cfee846b36468e2aaa5072966a2d",
+    "geode/lib/secp256k1-kmp-jni-jvm-darwin-0.24.0.jar": "3e713e1bea1eaf826a9d5e944ac5dbc6b2011b8b23b33ce92c5b43d65898ba1b",
+    "geode/lib/secp256k1-kmp-jni-jvm-extract-0.24.0.jar": "18e22f7ba93d26e2bb3d0330932f1744fb8f6464be8a2842603b72ae0acaa4a8",
+    "geode/lib/secp256k1-kmp-jni-jvm-linux-0.24.0.jar": "fbca9d4982332452107c9d0423d9305e11bd864cb244a52c2203b66662e82cd6",
+    "geode/lib/secp256k1-kmp-jni-jvm-mingw-0.24.0.jar": "461ca569f19be6d93974690bd8e05973517c642b8d00c50407890e3b2d7174bb",
+    "geode/lib/secp256k1-kmp-jvm-0.24.0.jar": "7422220226231cdf1676702661fe50b7615393fce842411813732f6bf67330bd",
+    "geode/lib/slf4j-api-2.0.19.jar": "e91ff6d720609e7a194ffe758c3ed5c84e798617ae07b0a0f6a4fe229741b4bb",
+    "geode/lib/sqlite-bundled-jvm-2.7.1.jar": "ced6f3d8433a7091745c294f1e4bd7f17434986d81dfd2145147cd571b167251",
+    "geode/lib/sqlite-jvm-2.7.1.jar": "7a6d8db5ae363d96a4f65c9b6f6b3361b178c41e15a4f06bb2cd59403807474f"
+  }
+}

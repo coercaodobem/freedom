@@ -1,7 +1,7 @@
 # Plano de Testes Central — Projeto Property
 
-**Status:** execução parcial atualizada em 2026-10-30. O push local está autenticado como `coercaodobem`, e a PWA foi publicada em HTTPS com validação visual inicial e comparação dos arquivos publicados. A suíte smoke local passou em 2026-10-28. Não há resultado final comprovado para o ensaio de disponibilidade de 24 horas. O plano integral, incluindo Android/iOS, engine de pagamentos XNO e disponibilidade 24h, ainda não foi executado.
-**Objetivo:** verificar reuso do Amethyst, origem/dependências, identidade local, comunicação, nodes, PWA, publicidade e pagamentos XNO conforme os critérios deste documento.
+**Status:** execução parcial atualizada em 2026-10-30. O push local está autenticado como `coercaodobem`, e a PWA foi publicada em HTTPS com validação visual inicial e comparação dos arquivos publicados. A suíte smoke local passou em 2026-10-28. Não há resultado final comprovado para o ensaio de disponibilidade de 24 horas. O plano integral, incluindo Android/iOS, engine de pagamentos BTC/XMR/XNO e disponibilidade 24h, ainda não foi executado.
+**Objetivo:** verificar reuso do Amethyst, origem/dependências, identidade local, comunicação, nodes, PWA, publicidade e pagamentos BTC/XMR/XNO conforme os critérios deste documento.
 
 ## 1. Baseline do MVP
 
@@ -16,8 +16,8 @@ Este plano considera a visão consolidada em [identidade-do-projeto.md](identida
 - O cliente publica em mais de um relay selecionado. A PWA tem uma ponte opcional e de melhor esforço entre relays selecionados: eventos públicos assinados são replicados; gift wraps NIP-17 só seguem para inbox relays da própria identidade. Isso não é encaminhamento P2P genérico nem execução móvel em segundo plano.
 - A identidade é criada com chave aleatória local. A senha cifra/desbloqueia a chave armazenada no navegador; não é usada diretamente como chave privada e não é enviada a nenhum servidor. A recuperação é local, sem redefinição central.
 - PCs podem operar relays/nodes continuamente. A PWA móvel só colabora enquanto ativa e não promete manter conexão ou node em segundo plano.
-- Publicidade é um evento/cartão separado de mensagens privadas. O anunciante envia uma campanha assinada com criativo, link, oferta XNO em raw e validade. O node revisa e aceita ou recusa antes de receber pagamento.
-- Ao aceitar, o node emite endereço Nano exclusivo e prazo. O anúncio só é publicado após pagamento confirmado. Recusa anterior ao pagamento não exige reembolso; pagamentos inesperados, atrasados ou incompatíveis seguem devolução como nova transferência.
+- Publicidade é um evento/cartão separado de mensagens privadas. O anunciante envia uma campanha assinada com criativo, link, oferta com moeda, valor atômico e validade. O node revisa e aceita ou recusa antes de receber pagamento.
+- Ao aceitar, o node emite endereço exclusivo da moeda e prazo. O anúncio só é publicado após pagamento confirmado. Recusa anterior ao pagamento não exige reembolso; pagamentos inesperados, atrasados ou incompatíveis seguem devolução como nova transferência.
 - O preço é uma oferta por colocação durante período acordado, sem cobrança por clique nem garantia de impressões. O node controla sua carteira localmente; a chave Nano é separada das chaves Nostr e não fica na PWA.
 
 Referências de protocolo para pesquisa e fixação da versão no projeto: [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md), [NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md), [unidades e blocos Nano](https://docs.nano.org/integration-guides/the-basics/). Referências upstream do reuso: [Amethyst](https://github.com/vitorpamplona/amethyst), [README e arquitetura](https://github.com/vitorpamplona/amethyst/blob/main/README.md), [licença](https://github.com/vitorpamplona/amethyst/blob/main/LICENSE). Esses links são documentação; não podem ser dependências do cliente em runtime.
@@ -53,7 +53,7 @@ Referências de protocolo para pesquisa e fixação da versão no projeto: [NIP-
 | 2026-10-30 | Habilitar Pages com origem GitHub Actions, permitir `modelo-mvp` e executar workflow `41130981007` | PASS: tentativa 2 concluída com sucesso no commit `e525f3028391cea6133fe7982b4e342ee576f449`; URL HTTPS `https://coercaodobem.github.io/property/`. |
 | 2026-10-30 | Abrir a URL pública e comparar os 16 arquivos publicados com a fonte | PASS: tela inicial carregou; nenhum erro ou aviso no console; todos os arquivos responderam HTTP 200 com SHA-256 idêntico ao checkout. [Registro dos hashes](evidence/pages-2026-10-30.json). Não cobre criação de identidade, mensagens pela Internet ou dispositivos reais. |
 
-**Não aprovado ou não executado:** ensaio completo de 24 horas; Android/iOS; teste de perda de rede em aparelho; revisão independente de segurança; marketplace completo; engine de campanhas XMR/XNO e verificação de pagamento; checkout; auditoria integral de dependências. O repositório `coercaodobem/property`, o push e a publicação inicial de Pages foram verificados em 2026-10-30. O leitor de campanha opt-in não é evidência de pagamento. Os itens pendentes continuam gates antes de beta público.
+**Não aprovado ou não executado:** ensaio completo de 24 horas; Android/iOS; teste de perda de rede em aparelho; revisão independente de segurança; marketplace completo; engine de campanhas BTC/XMR/XNO e verificação de pagamento; checkout; auditoria integral de dependências. O repositório `coercaodobem/property`, o push e a publicação inicial de Pages foram verificados em 2026-10-30. O leitor de campanha opt-in não é evidência de pagamento. Os itens pendentes continuam gates antes de beta público.
 
 Para repetir a suíte local: `bash property/tests/run-smoke.sh`. Para a integração entre dois relays isolados: `bash property/tests/run-bridge-integration.sh [porta-origem] [porta-destino]`. O ensaio de 24 horas é separado: `node property/tests/relay-soak.mjs 86400 60 17447`; em execução curta, informe duração e intervalo menores mantendo porta loopback livre.
 
@@ -70,7 +70,7 @@ O commit `55e379c9dbdf8637b32422d32e982460aa5862e5` acrescentou a marca Property
 | PROP-05 | Publicação e instalação | Workflow passa, URL nova abre sem erros, manifesto/ícone/caches locais corretos; reinstalar atalho quando necessário |
 | MONEY-01 | 1 XMR, 1 piconero e uint64 | Conversão exata em strings inteiras; mais de 12 casas ou overflow rejeitados |
 | MONEY-02 | 1 XNO, 1 raw e uint128 | Conversão exata; mais de 30 casas ou overflow rejeitados |
-| MONEY-03 | Oferta XMR/XNO e edição | Seleção de moeda, `price_atomic` exato, vitrine correspondente; `price_raw` exclusivo para compatibilidade XNO; round-trip no relay |
+| MONEY-03 | Oferta BTC/XMR/XNO e edição | Seleção de moeda, `price_atomic` exato, vitrine correspondente; `price_raw` exclusivo para compatibilidade XNO; round-trip no relay |
 | MONEY-04 | Campanha v2 e legada | Moeda/unidade explícitas em v2; legado exclusivamente XNO; rejeitar moeda desconhecida, campos ambíguos, assinatura inválida e transação inexistente no futuro verificador |
 | XMR-01 | Recebimento por subendereço | Carteira sincronizada identifica campanha, montante atômico e transação; hash declarado não é prova |
 | XMR-02 | Confirmação/desbloqueio e reorganização | Política registrada, publicação suspensa enquanto insuficiente; repetir após reorganização sem duplicar campanha |
@@ -85,8 +85,8 @@ O commit `55e379c9dbdf8637b32422d32e982460aa5862e5` acrescentou a marca Property
 | Plataforma | Interface | Relay |
 |---|---|---|
 | Ubuntu/Linux x86_64 | Navegador e instalação PWA quando suportada | Pacote incluído; executar smoke, integração e gate de 24 horas |
-| Windows | Validar Edge/Chrome, instalação e recuperação | Empacotamento e execução nativos pendentes |
-| macOS | Validar Safari/Chrome e instalação disponível | Empacotamento por arquitetura, assinatura e execução pendentes |
+| Windows | Validar Edge/Chrome, instalação e recuperação | Pacote PowerShell x64 incluído; validar execução, SQLite e reinício no CI Windows |
+| macOS | Validar Safari/Chrome e instalação disponível | Pacote arm64 incluído; validar no CI macOS Apple Silicon. Intel e distribuição assinada/notarizada pendentes |
 | Android | Validar navegador, instalação PWA, rede e suspensão reais | Solução contínua nativa ainda em pesquisa; não prometer segundo plano na PWA |
 | iOS/iPadOS | Validar Safari, adicionar à tela inicial, recuperação e suspensão reais | Solução contínua ainda em pesquisa; registrar restrições efetivas da plataforma |
 
@@ -286,3 +286,15 @@ Para cada caso, registrar:
 - defeito associado, severidade e reteste.
 
 Este arquivo é o plano. Ele não confirma que as funcionalidades já existem ou que os testes passaram.
+
+## Extensão BTC e plataformas de computador
+
+- BTC-01: converter 1 BTC/1 satoshi e limite de 21 milhões; rejeitar mais de 8 casas, expoente, negativo e overflow.
+- BTC-02: publicar/ler oferta e campanha BTC sem reinterpretar Nano raw ou Monero piconero.
+- BTC-03 (pendente): regtest/signet, carteira local, output/endereço exclusivo, mempool, confirmações, conflitos/substituição, reorganização e reembolso idempotente com taxas explícitas. Nenhuma liquidação ativada.
+- OS-01: Linux x86_64, Windows x64 e macOS arm64 executam `native-relay-integration.mjs` no CI com o Java do pacote, sem depender de Java instalado.
+- OS-02: validar caminhos com espaços, criar SQLite persistente e conferir os mesmos eventos após reiniciar.
+- OS-03: comparar cada segmento, hash do ZIP, hash dos JARs comuns e pin do launcher; pacote adulterado não pode executar.
+- OS-04: PWA em navegadores Windows/macOS/Linux/Android/iOS; separar ensaio automatizado desktop de teste físico de instalação/suspensão móvel.
+
+A inspeção dos JARs atuais identificou SQLite nativo macOS arm64, Windows x64 e Linux x64/arm64, mas não macOS Intel. Portanto não declarar relay Mac Intel suportado apenas porque existe JRE Intel.
