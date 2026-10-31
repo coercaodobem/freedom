@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "run_id": "property-offline-20261031T135834Z",
+  "started_utc": null,
+  "started_time_note": "Command start time was not captured by the executor.",
+  "checkpoint_utc": "2026-10-31T14:00:12Z",
+  "requested_executor": "Luna Max",
+  "actual_executor": "Codex GPT-6",
+  "repository": "https://github.com/coercaodobem/property",
+  "branch": "modelo-mvp",
+  "tested_commit": "1fdce94573590aed4ec9f16e8b3aa38003a27e41",
+  "remote_head_verified": "1fdce94573590aed4ec9f16e8b3aa38003a27e41",
+  "uncommitted_plan_diff_sha256": "cf6b840a76892ded728f789a9edbea472cb6da684b9f73264051bb11cde1bcef",
+  "previous_checkpoint": "property/docs/evidence/offline/20261031T134844Z",
+  "previous_checkpoint_correction": "Its case eligibility flags marked blocked/local-only cases as eligible. This checkpoint is authoritative: G00-02, G00-03, G00-04, and all downstream gate cases are not eligible for approval.",
+  "scope": "incremental offline diagnostics for G00/G01; no gate approval; PROPERTY_SCOPE_OFFLINE_PASS not achieved",
+  "host": {
+    "os": "Linux 7.0.0-38-generic x86_64",
+    "node": "v22.22.1",
+    "java": "25.0.4.1"
+  },
+  "test": {
+    "case": "G01-02",
+    "command": "node property/tests/native-relay-integration.mjs",
+    "port": 17457,
+    "bind_host": "127.0.0.1",
+    "exit_code": 1,
+    "result": "BLOCKED"
+  }
+}

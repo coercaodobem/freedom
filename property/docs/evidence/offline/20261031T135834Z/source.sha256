@@ -1,0 +1,4 @@
+ead7102f7bbf8d1565687853796196ad70a893f682cd110ebbf13cb6787a54b6  property/docs/plano-de-testes-central.md
+0e21e4ab9fc216e6d63bed940a8b4377631a25a18c466963253d7e69faacc8f9  property/tests/native-relay-integration.mjs
+8d2f11dabc8de4a4d4e8ab05b5b360427b1d9a31a831d13380e258e984fcbb6b  property/tests/run-smoke.sh
+a1a66f5f9cb3f1477798eff94ba8561853015e909dfa7cb96d5517241fbe608c  property/relay/start.sh

@@ -1,0 +1,20 @@
+{
+  "previous_checkpoint": "property/docs/evidence/offline/20261031T134844Z/isolation.json",
+  "profile": "default sandbox",
+  "network_disabled_marker": "CODEX_SANDBOX_NETWORK_DISABLED=1",
+  "effective_process_policy": {
+    "lsm": "bwrap//&unpriv_bwrap (enforce)",
+    "cap_eff": "0000000000000000",
+    "no_new_privs": 1,
+    "seccomp": 2,
+    "loopback_bind": "EPERM"
+  },
+  "case_network_behavior": {
+    "configured_endpoint": "127.0.0.1:17457 only",
+    "public_tcp_probe_sent": false,
+    "public_dns_query_sent": false,
+    "public_endpoint_configured": false
+  },
+  "verdict": "BLOCKED",
+  "reason": "The local launcher could not bind its loopback socket under the default sandbox. The alternate process profile has IPv4 and IPv6 default routes and uninspectable firewall rules, so it was not used for this test."
+}

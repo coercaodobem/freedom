@@ -1,0 +1,13 @@
+{
+  "case": "G01-02 native launcher integration",
+  "launcher": "property/relay/start.sh",
+  "runtime": "repository-bundled Geode and Java",
+  "relay": "ws://127.0.0.1:17457",
+  "data_directory": "unique temporary directory with a path containing spaces",
+  "config_directory": "unique temporary directory with a path containing spaces",
+  "external_routes": "none configured by the test",
+  "cleanup": {
+    "child_process_running_after_failure": false,
+    "temporary_test_directory_remaining": false
+  }
+}
